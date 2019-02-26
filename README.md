@@ -22,16 +22,18 @@ catkin_make
 After successful installation and build:
 ```
 source ~/ws/robauton_lab1/devel/setup.bash
-cd ~/ws/robauton_lab1/cmu-16662-robot-ctrl
+cd ~/ws/robauton_lab1/src/cmu-16662-robot-ctrl
 roslaunch launch/position_control.launch
 ```
 
 While this is running, in a separate terminal window (**NOTE**: the robot will move after these commands):
 ```
 source ~/ws/robauton_lab1/devel/setup.bash
-cd ~/ws/robauton_lab1/cmu-16662-robot-ctrl
+cd ~/ws/robauton_lab1/src/cmu-16662-robot-ctrl
 python scripts/command_joints.py
 ```
+
+The robot can be safely shut down by pressing Ctrl+c on the terminal that is running `position_control.launch`. The robot will move into a safe joint configuration before removing motor power.
 
 # Troubleshooting
 The argument `device_name` in `position_control.launch` needs to be updated to the actual device being used on your platform, which is the USB device that the U2D2 controller is using. If the default parameter in `position_control.launch` is not valid, the following command will show the device name:
