@@ -55,11 +55,13 @@ The message will appear similar to:
 In this case, `ttyUSB0` is indeed the device name. Change your launch script as appropriate based on the actual device your platform is using.
 
 ## Can't Open Serial Port
-The device (default `ttyUSB0`) needs admin rights to open a serial connection to the U2D2. If the device has insufficient permissions, you will see the following error message:
+The device (default `ttyUSB0`) needs admin rights to open a serial connection to the U2D2. If the device has insufficient permissions, you will receive a similar error message as below:
 ```
-[PortHandlerLinux::SetupPort] Error opening serial port!
 ================================================================================REQUIRED process [position_control-2] has died!
-
+process has died [pid 2775, exit code -11, cmd /home/telee/ws/robauton_lab1/devel/lib/dynamixel_workbench_controllers/position_control __name:=position_control __log:=/home/telee/.ros/log/6f8e199e-44d9-11e9-af4e-7470fd1b9301/position_control-2.log].
+log file: /home/telee/.ros/log/6f8e199e-44d9-11e9-af4e-7470fd1b9301/position_control-2*.log
+Initiating shutdown!
+================================================================================
 ```
 The following terminal command (that provides admin rights to this device) should fix this issue:
 ```
