@@ -54,6 +54,19 @@ The message will appear similar to:
 ```
 In this case, `ttyUSB0` is indeed the device name. Change your launch script as appropriate based on the actual device your platform is using.
 
+## Can't Open Serial Port
+The device (default `ttyUSB0`) needs admin rights to open a serial connection to the U2D2. If the device has insufficient permissions, you will see the following error message:
+```
+[PortHandlerLinux::SetupPort] Error opening serial port!
+================================================================================REQUIRED process [position_control-2] has died!
+
+```
+The following terminal command (that provides admin rights to this device) should fix this issue:
+```
+sudo chmod a+rw /dev/ttyUSB0
+```
+Substitute `/dev/ttyUSB0` with the actual device name being used, if different.
+
 ## Motor Lockup
 If the robot stops following the joint commands, you may need to power cycle the motors. Hold the robot arm **BEFORE YOU DISCONNECT MOTOR POWER** because the arm will collapse otherwise. As you hold the arm, carefully unplug the USB controller and the power adapter. Put the arm back in a safe configuration, and reconnect both the controller and the power adapter.
 
