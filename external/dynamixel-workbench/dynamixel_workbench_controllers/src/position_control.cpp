@@ -16,6 +16,9 @@
 
 /* Authors: Taehun Lim (Darby) */
 
+#include <stdexcept>
+#include <string>
+
 #include "dynamixel_workbench_controllers/position_control.h"
 
 PositionControl::PositionControl()
@@ -85,8 +88,28 @@ void PositionControl::initMsg()
   // Setting some placeholder I-D gains now, there are default P gains
   for (int index = 0; index < dxl_cnt_; index++)
   {
-    dxl_wb_->itemWrite(dxl_id_[index], "Position_I_Gain", 5);
-    dxl_wb_->itemWrite(dxl_id_[index], "Position_D_Gain", 50);
+    bool write_pos_i_gain = dxl_wb_->itemWrite(dxl_id_[index], "Position_I_Gain", 5);
+    bool write_pos_d_gain = dxl_wb_->itemWrite(dxl_id_[index], "Position_D_Gain", 50);
+    bool write_drive_mode = dxl_wb_->itemWrite(dxl_id_[index], "Drive_Mode", 0);
+
+    // Assert the values have actually been written
+    if (!write_pos_i_gain)
+    {
+      throw std::runtime_error(std::string("Could not write register \"Position_I_Gain\" for servo " +
+                                           std::to_string(index)).c_str());
+    }
+
+    if (!write_pos_d_gain)
+    {
+      throw std::runtime_error(std::string("Could not write register \"Position_D_Gain\" for servo " +
+                                           std::to_string(index)).c_str());
+    }
+
+    if (!write_drive_mode)
+    {
+      throw std::runtime_error(std::string("Could not write register \"Drive_Mode\" for servo " +
+                                           std::to_string(index)).c_str());
+    }
   }
 
 
