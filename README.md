@@ -5,31 +5,30 @@ This package contains control software and utilities for using the robots for th
 This package requires the following software dependencies:
 - Ubuntu 16.04 LTS
 - ROS Kinetic
-- TBD
 
 # Installation
 ```
-mkdir -p ~/ws/robauton_lab1/src
-cd ~/ws/robauton_lab1
+mkdir -p ~/ws/robauton_example/src
+cd ~/ws/robauton_example
 catkin_make
-cd ~/ws/robauton_lab1/src
+cd ~/ws/robauton_example/src
 git clone https://github.com/timeous/cmu-16662-robot-ctrl
-cd ~/ws/robauton_lab1
+cd ~/ws/robauton_example
 catkin_make
 ```
 
-# Basic Usage
+# Basic Control Usage
 After successful installation and build:
 ```
-source ~/ws/robauton_lab1/devel/setup.bash
-cd ~/ws/robauton_lab1/src/cmu-16662-robot-ctrl
+source ~/ws/robauton_example/devel/setup.bash
+cd ~/ws/robauton_example/src/cmu-16662-robot-ctrl
 roslaunch launch/position_control.launch
 ```
 
 While this is running, in a separate terminal window (**NOTE**: the robot will move after these commands):
 ```
-source ~/ws/robauton_lab1/devel/setup.bash
-cd ~/ws/robauton_lab1/src/cmu-16662-robot-ctrl
+source ~/ws/robauton_example/devel/setup.bash
+cd ~/ws/robauton_example/src/cmu-16662-robot-ctrl
 python scripts/command_joints.py
 ```
 
@@ -58,7 +57,7 @@ In this case, `ttyUSB0` is indeed the device name. Change your launch script as 
 The device (default `ttyUSB0`) needs admin rights to open a serial connection to the U2D2. If the device has insufficient permissions, you will receive a similar error message as below:
 ```
 ================================================================================REQUIRED process [position_control-2] has died!
-process has died [pid 2775, exit code -11, cmd /home/telee/ws/robauton_lab1/devel/lib/dynamixel_workbench_controllers/position_control __name:=position_control __log:=/home/telee/.ros/log/6f8e199e-44d9-11e9-af4e-7470fd1b9301/position_control-2.log].
+process has died [pid 2775, exit code -11, cmd /home/telee/ws/robauton_example/devel/lib/dynamixel_workbench_controllers/position_control __name:=position_control __log:=/home/telee/.ros/log/6f8e199e-44d9-11e9-af4e-7470fd1b9301/position_control-2.log].
 log file: /home/telee/.ros/log/6f8e199e-44d9-11e9-af4e-7470fd1b9301/position_control-2*.log
 Initiating shutdown!
 ================================================================================
