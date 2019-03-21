@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Overview
 This package contains control software and utilities for using the robots for the CMU 16-662: Robot Autonomy course.
 
@@ -73,3 +74,7 @@ If the robot stops following the joint commands, you may need to power cycle the
 
 # Attribution
 Thanks to Adithya Murali (@adithyamurali) for creating the skeleton and basic usage scripts.
+=======
+# cmu-16662-robot-ctrl
+Package for running the lab scripts for Robot Autonomy
+>>>>>>> 941bb2b99426104207665f32c35faf1c3d7e06b9
