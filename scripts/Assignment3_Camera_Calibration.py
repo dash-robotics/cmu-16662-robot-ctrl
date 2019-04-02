@@ -40,7 +40,7 @@ def generatesample():
     print(sample)
     return sample
 
-def main():
+def main(noiter=15):
     rospy.init_node('camera_calibration', anonymous=True)
 
     bridge = CvBridge()
@@ -50,10 +50,10 @@ def main():
     K_matrix = np.array(Calib.K)
     fk = forward_kinematics_extrinsics.forwardKinematics('arm_base_link', 'ar_tag')
 
-    positions = np.zeros((15, 3))
-    orientations = np.zeros((15, 4))
-    joint_angles = np.zeros((15, 5))
-    end_effector_positions = np.zeros((15, 4, 4))
+    positions = np.zeros((noiter, 3))
+    orientations = np.zeros((noiter, 4))
+    joint_angles = np.zeros((noiter, 5))
+    end_effector_positions = np.zeros((noiter, 4, 4))
     rad_from_deg = np.pi/180.
 
     # Send to Home Position
@@ -80,7 +80,7 @@ def main():
 
     # # Send nodes of the path as commands to controller
     count = 0
-    while count < 15:
+    while count < noiter:
 
         joint_angle = generatesample()
         joint_angles[count, :] = joint_angle
@@ -108,17 +108,19 @@ def main():
 
         count += 1
 
+    np.savez("../data/calibration/calibration_info.npz", position=positions, orientation=orientations, camerainfo=K_matrix, \
+                                                         joint_angles=joint_angles, forward_kinematics=end_effector_positions)
 
     R = calculate_extrinsic(positions, K_matrix, end_effector_positions)
     print(R)
-    # np.savez("../data/calibration/calibration_info.npz", position=positions, orientation=orientations, camerainfo=K_matrix, \
-    #                                                      joint_angles=joint_angles, forward_kinematics=end_effector_position)
+
 
 def calculate_extrinsic(positions, K_matrix, end_effector_positions):
-    p = get_p(positions)
+    p = get_p(K_matrix, positions)
     P = get_P(end_effector_positions)
     M = get_projection_matrix(p, P)
     K,R = linalg.rq(M[:,0:3])
+    print(K/K[2,2])
     T = np.matmul(np.linalg.inv(K),M[:,3])
     H = np.vstack((np.hstack((R,T.reshape((3,1)))),np.array([[0,0,0,1]])))
     return H
@@ -140,10 +142,8 @@ def get_projection_matrix(p, P):
     return M
 
 
-def get_p(position):
-    intrinsic = np.array([[615.8053588867188, 0.0, 328.7790222167969],
-                         [0.0, 615.8865356445312, 229.94618225097656],
-                         [0.0, 0.0, 1.0]])
+def get_p(K_matrix, position):
+    intrinsic = K_matrix.reshape((3,3))
     K_3_4 = np.hstack((intrinsic, np.array([[0],[0],[0]])))
     homogeneous_3D_point = np.hstack((position, np.ones((position.shape[0], 1))))
     homogeneous_pixel_coordinate = np.matmul(K_3_4,homogeneous_3D_point.T)
@@ -152,49 +152,8 @@ def get_p(position):
 
 
 def get_P(end_effector_position):
-    point_3D_world_frame = end_effector_position[:,3,0:3]
+    point_3D_world_frame = end_effector_position[:,0:3,3]
     return point_3D_world_frame
 
 if __name__ == "__main__":
-    main()
-
-# class camera_calibration:
-#     def __init__(self):
-#         self.positions = np.zeros((15, 3))
-#         self.orientations = np.zeros((15, 4))
-
-#         self.sub_img = message_filters.Subscriber("camera/color/image_raw", Image)
-#         self.sub_artag = message_filters.Subscriber("ar_pose_marker", AlvarMarkers)
-#         self.ts = message_filters.ApproximateTimeSynchronizer([self.sub_img, self.sub_artag], 10, 0.1, allow_headerless=True)
-#         self.ts.registerCallback(self.callback)
-
-#         self.sub_info = rospy.Subscriber("camera/color/camera_info", CameraInfo, self.infocallback)
-#         self.K_matrix = None
-
-#     def callback(self, img, artag):
-#         print(flag, 'Hiiiiiiii')
-#         if artag.markers == None:
-#             return
-#         else:
-#             try:
-#                 cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
-#             except CvBridgeError as e:
-#                 print(e)
-#             if flag != 0:
-#                 print(flag)
-#                 pos = artag.markers[0].pose.pose.position
-#                 self.positions[i, :] = np.array([pos.x, pos.y, pos.z])
-#                 q = artag.markers[0].pose.pose.orientation
-#                 self.orientations[i, :] = np.array([q.x, q.y, q.z, q.w])
-#                 cv2.imwrite('../data/caloibration/image_%d.png'%flag, cv_image)
-#                 flag == 0
-#                 if flag == 15:
-#                     np.savez("../data/calibration/artag_pos.npz", position = self.positions, orientation=self.orientations)
-#         # (rows,cols,channels) = cv_image.shape
-
-#         # cv2.imshow("Image window", cv_image)
-#         # cv2.waitKey(3)
-
-#     def infocallback(self, data):
-#         if self.K_matrix == None:
-#             self.K_matrix = data.K
+    main(100)
