@@ -40,9 +40,9 @@ def main():
     print("Robot moving. Please wait.")
     home_arm(pub)
 
-    X = np.array([[ 0., 20., 50., -80., 45.]])
-    fk = forward_kinematics_extrinsics.forwardKinematics('arm_base_link', 'ar_tag')
-    M = fk.getJointForwardKinematics(X[0,0:,4]*rad_from_deg)
+    X = np.array([[ 90., 0., -90., 90., 0.]])
+    fk = forward_kinematics_extrinsics.forwardKinematics('bottom_plate', 'ar_tag')
+    M = fk.getJointForwardKinematics(X*rad_from_deg)
     for i in range(M.shape[0]):
     	print(np.matmul(np.linalg.inv(M[0,:,:]),M[i,:,:]))
 

@@ -48,7 +48,7 @@ def main(noiter=15):
     rospy.sleep(2)
     Calib = rospy.wait_for_message("/camera/color/camera_info", CameraInfo)
     K_matrix = np.array(Calib.K)
-    fk = forward_kinematics_extrinsics.forwardKinematics('arm_base_link', 'ar_tag')
+    fk = forward_kinematics_extrinsics.forwardKinematics('bottom_plate', 'ar_tag')
 
     positions = np.zeros((noiter, 3))
     orientations = np.zeros((noiter, 4))
@@ -81,18 +81,17 @@ def main(noiter=15):
     # # Send nodes of the path as commands to controller
     count = 0
     while count < noiter:
-
         joint_angle = generatesample()
         joint_angles[count, :] = joint_angle
         print(joint_angles)
         joint_angle = (joint_angle*rad_from_deg).tolist()
         set_arm_joint(pub, np.array(joint_angle))
 
-        joint_angle = np.append(joint_angle, 0)
+        joint_angle = np.append(np.append(0, joint_angle), 0)
 
-        M = fk.getJointForwardKinematics(joint_angle.reshape((1,6)))
-        end_effector_positions[count, :, :] = np.matmul(np.linalg.inv(M[0,:,:]),M[5,:,:])
-
+        M = fk.getJointForwardKinematics(joint_angle.reshape((1,7)))
+        end_effector_positions[count, :, :] = np.matmul(np.linalg.inv(M[0,:,:]),M[6,:,:])
+        print(end_effector_positions[count, :, :])
         rospy.sleep(4)
 
         try:
@@ -111,16 +110,16 @@ def main(noiter=15):
     np.savez("../data/calibration/calibration_info.npz", position=positions, orientation=orientations, camerainfo=K_matrix, \
                                                          joint_angles=joint_angles, forward_kinematics=end_effector_positions)
 
-    R = calculate_extrinsic(positions, K_matrix, end_effector_positions)
+    R = calculate_extrinsic(positions, K_matrix, end_effector_positions, noiter)
     print(R)
 
 
-def calculate_extrinsic(positions, K_matrix, end_effector_positions):
-    min_error = 10000000000000000
+def calculate_extrinsic(positions, K_matrix, end_effector_positions, noiter):
+    min_error = np.inf
     p = get_p(K_matrix, positions)
     P = get_P(end_effector_positions)
-    for i in range(0,1000):
-        indices = np.random.randint(0, 100, size=6)
+    for i in range(0,5000):
+        indices = np.random.randint(0, noiter, size=6)
         M = get_projection_matrix(p[indices,:], P[indices,:])
         homogeneous_P = np.hstack((P, np.ones((P.shape[0], 1))))
         estimated_p = np.matmul(M,homogeneous_P.T)
@@ -132,9 +131,10 @@ def calculate_extrinsic(positions, K_matrix, end_effector_positions):
             final_M = M
     K,R = linalg.rq(final_M[:,0:3])
     print(K/K[2,2])
-    T = np.matmul(np.linalg.inv(K),M[:,3])
+    T = np.matmul(np.linalg.inv(K),final_M[:,3])
     H = np.vstack((np.hstack((R,T.reshape((3,1)))),np.array([[0,0,0,1]])))
-    print(H)
+    print(np.linalg.inv(H))
+    print(min_error)
     return H
 
 def get_projection_matrix(p, P):
@@ -168,10 +168,6 @@ def get_P(end_effector_position):
     return point_3D_world_frame
 
 if __name__ == "__main__":
-<<<<<<< HEAD
-    main(30)
-=======
-    main(100)
-    # calib_info = np.load("calibration_info.npz")
-    # calculate_extrinsic(calib_info['position'], calib_info['camerainfo'], calib_info['forward_kinematics'])
->>>>>>> 00f3b8d0a97eda761ca978e46306ced5397a027d
+    # main(50)
+    calib_info = np.load("../data/calibration/calibration_info.npz")
+    calculate_extrinsic(calib_info['position'], calib_info['camerainfo'], calib_info['forward_kinematics'], 20)

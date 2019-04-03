@@ -6,7 +6,7 @@ from urdf_parser_py.urdf import URDF
 
 # Class for storing information about the robot and computing the forward kinematics 
 class forwardKinematics:
-        def __init__(self, base_link='arm_base_link', end_link='ar_tag', \
+        def __init__(self, base_link='bottom_plate', end_link='ar_tag', \
                 path="/media/karmesh/DATA/CMU/Courses/Robot_Autonomy/Homework/hw3_release/hw3_release/code/locobot_description/urdf/locobot_description.urdf"):
 
                 self.axis = None
@@ -122,8 +122,8 @@ class forwardKinematics:
 
         def urdfParser(self, robot, base_link, end_link):
                 joint_list = robot.get_chain(base_link,end_link,links=False)
-                self.position = np.zeros((6,3))
-                self.axis = np.zeros((6,3))
+                self.position = np.zeros((len(joint_list),3))
+                self.axis = np.zeros((len(joint_list),3))
                 print(joint_list)
                 for i in range(len(joint_list)):
                         self.position[i,:] = robot.joint_map[joint_list[i]].origin.xyz
@@ -143,7 +143,7 @@ if __name__ == "__main__":
 	# joint_angles = calibration_info[calibration_info.files[3]][0].reshape((1,5))
 	# fk = forwardKinematics()
         # M = fk.getJointForwardKinematics(joint_angles)
-        X = np.array([[ 0., 20., 50., -80., 45., 0.]])
+        X = np.array([[0., 90., 0., -90., 90., 0., 0.]])
         fk = forwardKinematics()
         M = fk.getJointForwardKinematics(X*np.pi/180)
         for i in range(M.shape[0]):
