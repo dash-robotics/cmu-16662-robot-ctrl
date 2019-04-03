@@ -12,7 +12,7 @@ from sensor_msgs.msg import (JointState,
                              CameraInfo)
 from cv_bridge import CvBridge, CvBridgeError
 from ar_track_alvar_msgs.msg import AlvarMarkers
-import forward_kinematics_extrinsics
+from forward_kinematics_extrinsics import forwardKinematics
 
 ROSTOPIC_SET_ARM_JOINT = '/goal_dynamixel_position'
 #flag = 0
@@ -48,7 +48,7 @@ def main(noiter=15):
     rospy.sleep(2)
     Calib = rospy.wait_for_message("/camera/color/camera_info", CameraInfo)
     K_matrix = np.array(Calib.K)
-    fk = forward_kinematics_extrinsics.forwardKinematics('bottom_plate', 'ar_tag')
+    fk = forwardKinematics('bottom_plate', 'ar_tag')
 
     positions = np.zeros((noiter, 3))
     orientations = np.zeros((noiter, 4))
@@ -110,32 +110,45 @@ def main(noiter=15):
     np.savez("../data/calibration/calibration_info.npz", position=positions, orientation=orientations, camerainfo=K_matrix, \
                                                          joint_angles=joint_angles, forward_kinematics=end_effector_positions)
 
-    R = calculate_extrinsic(positions, K_matrix, end_effector_positions, noiter)
-    print(R)
+    calculate_extrinsic(positions, K_matrix, end_effector_positions, noiter)
+    print("\n================================\n")
+    calculate_extrinsic_opencv(positions, K_matrix, end_effector_positions)
 
 
 def calculate_extrinsic(positions, K_matrix, end_effector_positions, noiter):
-    min_error = np.inf
+    max_inliers = 0
     p = get_p(K_matrix, positions)
     P = get_P(end_effector_positions)
-    for i in range(0,5000):
+    for i in range(0,50000):
+        # Sample 6 points
         indices = np.random.randint(0, noiter, size=6)
         M = get_projection_matrix(p[indices,:], P[indices,:])
+
+        # Calculate reprojection error
         homogeneous_P = np.hstack((P, np.ones((P.shape[0], 1))))
         estimated_p = np.matmul(M,homogeneous_P.T)
         estimated_p = estimated_p/estimated_p[2,:]
-        error = np.linalg.norm(p-estimated_p[0:2,:].T)
-        print(error)
-        if error < min_error:
-            min_error = error
-            final_M = M
+        error = p - estimated_p[0:2,:].T
+        error = error[:,0]*error[:,0] + error[:,1]*error[:,1]
+
+        # Find inliers
+        inlier_indices = np.unique(np.where(np.abs(error)<3))
+        noinliers = np.sum(np.abs(error)<2)
+        if noinliers > max_inliers:
+            max_inliers = noinliers
+            final_inliers = inlier_indices
+
+    final_M = get_projection_matrix(p[final_inliers,:], P[final_inliers,:])
+    # RQ decomposition
     K,R = linalg.rq(final_M[:,0:3])
-    print(K/K[2,2])
-    T = np.matmul(np.linalg.inv(K),final_M[:,3])
-    H = np.vstack((np.hstack((R,T.reshape((3,1)))),np.array([[0,0,0,1]])))
-    print(np.linalg.inv(H))
-    print(min_error)
-    return H
+    rvec = forwardKinematics.getEulerAngles(np.linalg.inv(R))
+    tvec = np.matmul(np.linalg.inv(K),final_M[:,3])
+    H = np.vstack((np.hstack((R,tvec.reshape((3,1)))),np.array([[0,0,0,1]])))
+    print("Using PnP Algorithm without non-linear optimization  ")
+    print("Orientation : {0}".format(rvec))
+    print("Position : {0}".format(tvec))
+    return np.linalg.inv(H)
+
 
 def get_projection_matrix(p, P):
     num_points = p.shape[0]
@@ -167,7 +180,17 @@ def get_P(end_effector_position):
     point_3D_world_frame = end_effector_position[:,0:3,3]
     return point_3D_world_frame
 
+
+def calculate_extrinsic_opencv(positions, K_matrix, end_effector_positions):
+    p = get_p(K_matrix, positions)
+    P = get_P(end_effector_positions)
+    success, rvec, tvec, inliers = cv2.solvePnPRansac(P, p, K_matrix.reshape((3,3)), distCoeffs=None)
+    print("Using OpenCV solvePnPRansac")
+    print("Orientation : {0}".format(rvec.T[0]))
+    print("Position : {0}".format(tvec.T[0]))
+
 if __name__ == "__main__":
     # main(50)
     calib_info = np.load("../data/calibration/calibration_info.npz")
     calculate_extrinsic(calib_info['position'], calib_info['camerainfo'], calib_info['forward_kinematics'], 20)
+    calculate_extrinsic_opencv(calib_info['position'], calib_info['camerainfo'], calib_info['forward_kinematics'])
