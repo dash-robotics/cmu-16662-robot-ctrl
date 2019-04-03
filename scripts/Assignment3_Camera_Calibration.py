@@ -116,13 +116,25 @@ def main(noiter=15):
 
 
 def calculate_extrinsic(positions, K_matrix, end_effector_positions):
+    min_error = 10000000000000000
     p = get_p(K_matrix, positions)
     P = get_P(end_effector_positions)
-    M = get_projection_matrix(p, P)
-    K,R = linalg.rq(M[:,0:3])
+    for i in range(0,1000):
+        indices = np.random.randint(0, 100, size=6)
+        M = get_projection_matrix(p[indices,:], P[indices,:])
+        homogeneous_P = np.hstack((P, np.ones((P.shape[0], 1))))
+        estimated_p = np.matmul(M,homogeneous_P.T)
+        estimated_p = estimated_p/estimated_p[2,:]
+        error = np.linalg.norm(p-estimated_p[0:2,:].T)
+        print(error)
+        if error < min_error:
+            min_error = error
+            final_M = M
+    K,R = linalg.rq(final_M[:,0:3])
     print(K/K[2,2])
     T = np.matmul(np.linalg.inv(K),M[:,3])
     H = np.vstack((np.hstack((R,T.reshape((3,1)))),np.array([[0,0,0,1]])))
+    print(H)
     return H
 
 def get_projection_matrix(p, P):
@@ -157,3 +169,5 @@ def get_P(end_effector_position):
 
 if __name__ == "__main__":
     main(100)
+    # calib_info = np.load("calibration_info.npz")
+    # calculate_extrinsic(calib_info['position'], calib_info['camerainfo'], calib_info['forward_kinematics'])
