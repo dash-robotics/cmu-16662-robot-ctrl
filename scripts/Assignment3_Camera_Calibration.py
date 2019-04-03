@@ -156,4 +156,4 @@ def get_P(end_effector_position):
     return point_3D_world_frame
 
 if __name__ == "__main__":
-    main(100)
+    main(30)
