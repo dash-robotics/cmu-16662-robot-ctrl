@@ -7,6 +7,9 @@
   <arg name="profile_velocity"           default="10"/>
   <arg name="profile_acceleration"       default="5"/>
 
+  <arg name="use_arm"                    default="true"/>
+  <arg name="use_camera"                 default="true"/>
+
   <param name="device_name"              value="$(arg device_name)"/>
   <param name="baud_rate"                value="$(arg baud_rate)"/>
 
@@ -14,6 +17,9 @@
 
   <param name="profile_velocity"         value="$(arg profile_velocity)"/>
   <param name="profile_acceleration"     value="$(arg profile_acceleration)"/>
+
+  <param name="use_arm"                  value="$(arg use_arm)"/>
+  <param name="use_camera"               value="$(arg use_camera)"/>
 
   <node name="position_control" pkg="dynamixel_workbench_controllers" type="position_control" required="true" output="screen"/>
 </launch>
