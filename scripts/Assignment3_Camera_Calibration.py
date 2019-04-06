@@ -190,7 +190,7 @@ def calculate_extrinsic_opencv(positions, K_matrix, end_effector_positions):
     print("Position : {0}".format(tvec.T[0]))
 
 if __name__ == "__main__":
-    # main(50)
-    calib_info = np.load("../data/calibration/calibration_info.npz")
-    calculate_extrinsic(calib_info['position'], calib_info['camerainfo'], calib_info['forward_kinematics'], 20)
-    calculate_extrinsic_opencv(calib_info['position'], calib_info['camerainfo'], calib_info['forward_kinematics'])
+    main(50)
+    # calib_info = np.load("../data/calibration/calibration_info.npz")
+    # calculate_extrinsic(calib_info['position'], calib_info['camerainfo'], calib_info['forward_kinematics'], 20)
+    # calculate_extrinsic_opencv(calib_info['position'], calib_info['camerainfo'], calib_info['forward_kinematics'])
