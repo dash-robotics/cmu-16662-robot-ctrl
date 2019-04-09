@@ -10,12 +10,26 @@ from scipy import linalg
 from sensor_msgs.msg import (JointState,
                              Image,
                              CameraInfo)
+from std_msgs.msg import Float64
 from cv_bridge import CvBridge, CvBridgeError
 from ar_track_alvar_msgs.msg import AlvarMarkers
 import forward_kinematics_extrinsics
 
 ROSTOPIC_SET_ARM_JOINT = '/goal_dynamixel_position'
-#flag = 0
+ROSTOPIC_SET_PAN_JOINT = '/pan/command'
+ROSTOPIC_SET_TILT_JOINT = '/tilt/command'
+
+def set_camera_pan(pub, pan_rad):
+    pan_msg = Float64()
+    pan_msg.data = pan_rad
+    rospy.loginfo('Going to camera pan: {} rad'.format(pan_rad))
+    pub.publish(pan_msg)
+
+def set_camera_tilt(pub, tilt_rad):
+    tilt_msg = Float64()
+    tilt_msg.data = tilt_rad
+    rospy.loginfo('Going to camera tilt: {} rad'.format(tilt_rad))
+    pub.publish(tilt_msg)
 
 def home_arm(pub):
     set_arm_joint(pub, np.zeros(5))
@@ -45,6 +59,9 @@ def main(noiter=15):
 
     bridge = CvBridge()
     pub = rospy.Publisher(ROSTOPIC_SET_ARM_JOINT, JointState, queue_size=1)
+    pan_pub = rospy.Publisher(ROSTOPIC_SET_PAN_JOINT, Float64, queue_size=1)
+    tilt_pub = rospy.Publisher(ROSTOPIC_SET_TILT_JOINT, Float64, queue_size=1)
+
     rospy.sleep(2)
     Calib = rospy.wait_for_message("/camera/color/camera_info", CameraInfo)
     K_matrix = np.array(Calib.K)
@@ -60,6 +77,9 @@ def main(noiter=15):
     raw_input("Robot ready to move to HOME POSITION. Press Enter to continue.")
     print("Robot moving. Please wait.")
     home_arm(pub)
+    set_camera_pan(pan_pub, rad_from_deg*0.)
+    set_camera_tilt(tilt_pub, rad_from_deg*0.)
+    rospy.sleep(4)
 
     def imgcallback(i):
         data = rospy.wait_for_message("/camera/color/image_raw", Image, timeout=5)
@@ -168,6 +188,6 @@ def get_P(end_effector_position):
     return point_3D_world_frame
 
 if __name__ == "__main__":
-    # main(50)
-    calib_info = np.load("../data/calibration/calibration_info.npz")
-    calculate_extrinsic(calib_info['position'], calib_info['camerainfo'], calib_info['forward_kinematics'], 20)
+    main(50)
+    # calib_info = np.load("../data/calibration/calibration_info.npz")
+    # calculate_extrinsic(calib_info['position'], calib_info['camerainfo'], calib_info['forward_kinematics'], 20)
