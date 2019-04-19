@@ -12,9 +12,11 @@ from sensor_msgs.msg import JointState
 from std_msgs.msg import Float64
 from std_msgs.msg import Empty
 from trac_ik_python.trac_ik import IK
+import camera_forward_kinematics 
+import tf
 
 GRIPPER_LINK = "gripper_link"
-ARM_BASE_LINK = "arm_base_link"
+ARM_BASE_LINK = "bottom_plate"
 MOVE_GROUP_NAME = 'arm'
 
 ROSTOPIC_SET_ARM_JOINT = '/goal_dynamixel_position'
@@ -24,7 +26,7 @@ ROSTOPIC_OPEN_GRIPPER = '/gripper/open'
 ROSTOPIC_CLOSE_GRIPPER = '/gripper/close'
 
 IK_POSITION_TOLERANCE = 0.01
-IK_ORIENTATION_TOLERANCE = np.pi/9
+IK_ORIENTATION_TOLERANCE = np.pi/6
 current_joint_state = None
 
 
@@ -33,17 +35,18 @@ def home_arm(pub):
     set_arm_joint(pub, np.zeros(5))
     rospy.sleep(5)
 
-def set_camera_pan(pub, pan_rad):
+def set_camera_angles(pan_pub, tilt_pub, pan_rad, tilt_rad, ck):
     pan_msg = Float64()
     pan_msg.data = pan_rad
     rospy.loginfo('Going to camera pan: {} rad'.format(pan_rad))
-    pub.publish(pan_msg)
+    pan_pub.publish(pan_msg)
 
-def set_camera_tilt(pub, tilt_rad):
     tilt_msg = Float64()
     tilt_msg.data = tilt_rad
     rospy.loginfo('Going to camera tilt: {} rad'.format(tilt_rad))
-    pub.publish(tilt_msg)
+    tilt_pub.publish(tilt_msg)
+
+    print("Camera Extrinsics", ck.cameraForwardKinematics(np.array([[pan_rad, tilt_rad, 0.]])))
 
 def set_arm_joint(pub, joint_target):
     joint_state = JointState()
@@ -52,8 +55,8 @@ def set_arm_joint(pub, joint_target):
 
 def get_joint_state(data):
     global current_joint_state
-    if len(data.position) == 11:
-    	current_joint_state = data.position[4:9]
+    # if len(data.position) == 9:
+    current_joint_state = data.position[0:5]
 
 def open_gripper(pub):
     empty_msg = Empty()
@@ -101,19 +104,14 @@ def compute_ik(ik_solver, target_pose, current_joint):
 
 def main():
     rospy.init_node('IK_Control', anonymous=True)
-
-    #target_poses = [Pose(Point(0.279, 0.176, 0.217),
-    #                     Quaternion(-0.135, 0.350, 0.329, 0.866)),
-    #                Pose(Point(0.339, 0.0116, 0.255),
-    #                     Quaternion(0.245, 0.613, -0.202, 0.723))]
-
-    target_poses = [Pose(Point(0.279, 0.176, 0.217),
-                         Quaternion(0, 0, 0, 1)),
-                    Pose(Point(0.239, 0.0116, 0.05),
-                         Quaternion(0, 0.8509035, 0, 0.525322))]
+    global current_joint_state
+    
+    rad_from_deg = np.pi/180.
 
     ik_solver = IK(ARM_BASE_LINK, GRIPPER_LINK)
-    
+    ck = camera_forward_kinematics.camerakinematics()
+
+    # Describing the publisher subscribers    
     rospy.Subscriber('/joint_states', JointState, get_joint_state)
 
     arm_pub = rospy.Publisher(ROSTOPIC_SET_ARM_JOINT, JointState, queue_size=1)
@@ -121,16 +119,57 @@ def main():
     tilt_pub = rospy.Publisher(ROSTOPIC_SET_TILT_JOINT, Float64, queue_size=1)
     gripper_open_pub = rospy.Publisher(ROSTOPIC_OPEN_GRIPPER, Empty, queue_size=1)
     gripper_close_pub = rospy.Publisher(ROSTOPIC_CLOSE_GRIPPER, Empty, queue_size=1)
+    tf_listener = tf.TransformListener()
     rospy.sleep(2)
 
-    home_arm(arm_pub)
+    # Homing of all servos
     close_gripper(gripper_close_pub)
+    set_camera_angles(pan_pub, tilt_pub, rad_from_deg*0., rad_from_deg*40.0, ck)  
 
-    for pose in target_poses:
+    rospy.sleep(5)
+    # while not rospy.is_shutdown():
+    #     try:
+    #         tf_listener.waitForTransform("/camera_depth_frame", "/icp_cuboid_frame", rospy.Time.now(), rospy.Duration(4.0))
+    #         position, quaternion = tf_listener.lookupTransform("/camera_depth_frame", "/icp_cuboid_frame", rospy.Time(0))
+    #         print("Box in depth frame")
+    #         print(position, quaternion)
+    #         break
+    #     except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException) as e:
+    #        print(e)
+    #     #    return
 
-        rospy.loginfo('Commanding arm to pose {}'.format(pose))
-	
+    # # for pose in target_poses:
+    # O = tf.transformations.euler_from_quaternion(quaternion)
+    # R, T = ck.getTransformedPose(np.array([O[0], O[1], O[2]]), np.array([position[0], position[1], position[2]]))
+    # print("Box in bottom plate frame" ,R, T)
+    # q = tf.transformations.quaternion_from_euler(R[0], R[1], R[2])
+    # poses = [Pose(Point(T[0], T[1], T[2]+0.1), Quaternion(q[0], q[1], q[2], q[3])),
+    #         Pose(Point(T[0], T[1], T[2]), Quaternion(q[0], q[1], q[2], q[3]))]
+    # rospy.loginfo('Commanding arm to pose {}'.format(poses))
+
+    # q = tf.transformations.quaternion_from_euler(0, 90, 0)
+    # poses = [Pose(Point(0.3, 0.000, 0.25), Quaternion(q[0], q[1], q[2], q[3])),
+    #         Pose(Point(0.3, 0.000, 0.10), Quaternion(q[0], q[1], q[2], q[3]))]
+
+    while not rospy.is_shutdown():
+        try:
+            tf_listener.waitForTransform("/bottom_plate", "/icp_cuboid_frame", rospy.Time.now(), rospy.Duration(4.0))
+            P, Q = tf_listener.lookupTransform("/bottom_plate", "/icp_cuboid_frame", rospy.Time(0))
+            print("Box in bottom plate frame")
+            print(P, Q)
+            break
+        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException) as e:
+           print(e)
+    
+    poses = [Pose(Point(P[0], P[1], P[2]+0.1), Quaternion(Q[0], Q[1], Q[2], Q[3])),
+             Pose(Point(P[0], P[1], P[2]), Quaternion(Q[0], Q[1], Q[2], Q[3]))]
+
+    target_joint = None
+
+    home_arm(arm_pub)
+    for pose in poses:
         print(current_joint_state)
+        print("Reaching a joint state")
         if current_joint_state:
             target_joint = compute_ik(
             ik_solver, pose, current_joint_state)
@@ -139,7 +178,8 @@ def main():
             set_arm_joint(arm_pub, target_joint)
             rospy.sleep(5)
 
-    open_gripper(gripper_open_pub)
+        open_gripper(gripper_open_pub)
+        rospy.sleep(4)
 
     raw_input("Robot ready to close gripper. Press Enter to continue.")
     print("Robot moving. Please wait.")
@@ -151,3 +191,10 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# Some values 
+    # target_poses = [Pose(Point(0.279, 0.176, 0.217),
+    #                      Quaternion(0, 0, 0, 1)),
+    #                 Pose(Point(0.239, 0.0116, 0.05),
+    #                      Quaternion(0, 0.8509035, 0, 0.525322))]

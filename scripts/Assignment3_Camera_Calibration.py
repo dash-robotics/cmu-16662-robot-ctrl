@@ -13,7 +13,7 @@ from sensor_msgs.msg import (JointState,
 from std_msgs.msg import Float64
 from cv_bridge import CvBridge, CvBridgeError
 from ar_track_alvar_msgs.msg import AlvarMarkers
-from forward_kinematics_extrinsics import forwardKinematics
+import forward_kinematics_extrinsics
 
 ROSTOPIC_SET_ARM_JOINT = '/goal_dynamixel_position'
 ROSTOPIC_SET_PAN_JOINT = '/pan/command'
@@ -48,7 +48,9 @@ def generatesample():
         if i == 3:
             sample[i] = np.random.randint(-10, 10, size=1) - 90
         elif i == 1:
-            sample[i] = np.random.randint(-5, 30, size=1)
+            sample[i] = np.random.randint(-10, 15, size=1)
+        elif i == 2:
+            sample[i] = np.random.randint(-35, 15, size=1)
         else:
             sample[i] = np.random.randint(-30, 30, size=1)
     print(sample)
@@ -65,7 +67,7 @@ def main(noiter=15):
     rospy.sleep(2)
     Calib = rospy.wait_for_message("/camera/color/camera_info", CameraInfo)
     K_matrix = np.array(Calib.K)
-    fk = forwardKinematics('bottom_plate', 'ar_tag')
+    fk = forward_kinematics_extrinsics.forwardKinematics('bottom_plate', 'ar_tag')
 
     positions = np.zeros((noiter, 3))
     orientations = np.zeros((noiter, 4))
@@ -161,7 +163,7 @@ def calculate_extrinsic(positions, K_matrix, end_effector_positions, noiter):
     final_M = get_projection_matrix(p[final_inliers,:], P[final_inliers,:])
     # RQ decomposition
     K,R = linalg.rq(final_M[:,0:3])
-    rvec = forwardKinematics.getEulerAngles(np.linalg.inv(R))
+    rvec = forward_kinematics_extrinsics.forwardKinematics.getEulerAngles(np.linalg.inv(R))
     tvec = np.matmul(np.linalg.inv(K),final_M[:,3])
     H = np.vstack((np.hstack((R,tvec.reshape((3,1)))),np.array([[0,0,0,1]])))
     print("Using PnP Algorithm without non-linear optimization  ")
@@ -205,12 +207,16 @@ def calculate_extrinsic_opencv(positions, K_matrix, end_effector_positions):
     p = get_p(K_matrix, positions)
     P = get_P(end_effector_positions)
     success, rvec, tvec, inliers = cv2.solvePnPRansac(P, p, K_matrix.reshape((3,3)), distCoeffs=None)
+    H = forward_kinematics_extrinsics.forwardKinematics.createTransformationMatrix(rvec,tvec.reshape((-1)))
+    print(success)
+    print(len(inliers))
     print("Using OpenCV solvePnPRansac")
     print("Orientation : {0}".format(rvec.T[0]))
     print("Position : {0}".format(tvec.T[0]))
+    print("Transformation : {0}".format(np.linalg.inv(H)))
 
 if __name__ == "__main__":
-    main(50)
-    # calib_info = np.load("../data/calibration/calibration_info.npz")
-    # calculate_extrinsic(calib_info['position'], calib_info['camerainfo'], calib_info['forward_kinematics'], 20)
-    # calculate_extrinsic_opencv(calib_info['position'], calib_info['camerainfo'], calib_info['forward_kinematics'])
+    main(100)
+    calib_info = np.load("../data/calibration/calibration_info.npz")
+    calculate_extrinsic(calib_info['position'], calib_info['camerainfo'], calib_info['forward_kinematics'], 20)
+    calculate_extrinsic_opencv(calib_info['position'], calib_info['camerainfo'], calib_info['forward_kinematics'])
