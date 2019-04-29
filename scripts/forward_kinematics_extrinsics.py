@@ -11,9 +11,10 @@ class forwardKinematics:
 
                 self.axis = None
                 self.position = None
-                # arm_cuboid_properties = np.load('../data/arm_cuboid_properties.npz')
-                # self.arm_cuboid_origin = arm_cuboid_properties[arm_cuboid_properties.files[0]]
-                # self.dimension = arm_cuboid_properties[arm_cuboid_properties.files[1]]
+                arm_cuboid_properties = np.load('../data/arm_cuboid_properties.npz')
+                self.arm_cuboid_origin = arm_cuboid_properties[arm_cuboid_properties.files[0]]
+                self.dimension = arm_cuboid_properties[arm_cuboid_properties.files[1]]
+                print(self.dimension)
                 robot = URDF.from_xml_file(path)
                 self.urdfParser(robot, base_link, end_link)
                 self.loadURDFinfo()
@@ -54,32 +55,32 @@ class forwardKinematics:
                 return H
 
         # Returns the Origin, Orientation and Dimension of the collision cuboids around the robot arm links
-        # def getRotatedCuboid(self, joint_angles):
-        #         H = self.getJointForwardKinematics(joint_angles)
-        #         cuboid = np.zeros((7,3,3))
+        def getRotatedCuboid(self, joint_angles):
+                H = self.getJointForwardKinematics(joint_angles)
+                cuboid = np.zeros((7,3,3))
 
-        #         # Cuboid information for links 1 to 5 which are connected to revolute joints
-        #         for i in range(H.shape[0]):
-        #                 # Origin of the cuboid (x,y,z)
-        #                 cuboid[i,0,:] = np.matmul(H[i,:,:],self.arm_cuboid_origin[i,:].T)[0:3]
+                # Cuboid information for links 1 to 5 which are connected to revolute joints
+                for i in range(H.shape[0]-1):
+                        # Origin of the cuboid (x,y,z)
+                        cuboid[i,0,:] = np.matmul(H[i+1,:,:],self.arm_cuboid_origin[i,:].T)[0:3]
 
-        #                 # Rotation angles of the cuboid (roll, pitch, yaw)
-        #                 cuboid[i,1,:] = self.getEulerAngles(H[i,0:3,0:3])
+                        # Rotation angles of the cuboid (roll, pitch, yaw)
+                        cuboid[i,1,:] = self.getEulerAngles(H[i+1,0:3,0:3])
 
-        #                 # Dimension of the cuboid along (x,y,z)
-        #                 cuboid[i,2,:] = self.dimension[i,:]
+                        # Dimension of the cuboid along (x,y,z)
+                        cuboid[i,2,:] = self.dimension[i,:]
 
-        #         # Cuboid information for the first finger
-        #         cuboid[5,0,:] = np.matmul(H[4,:,:],self.arm_cuboid_origin[5,:].T)[0:3]
-        #         cuboid[5,1,:] = self.getEulerAngles(H[4,0:3,0:3])
-        #         cuboid[5,2,:] = self.dimension[5,:]
+                # Cuboid information for the first finger
+                cuboid[i+1,0,:] = np.matmul(H[i+1,:,:],self.arm_cuboid_origin[i+1,:].T)[0:3]
+                cuboid[i+1,1,:] = self.getEulerAngles(H[i+1,0:3,0:3])
+                cuboid[i+1,2,:] = self.dimension[i+1,:]
 
-        #         # Cuboid information for the second finger
-        #         cuboid[6,0,:] = np.matmul(H[4,:,:],self.arm_cuboid_origin[6,:].T)[0:3]
-        #         cuboid[6,1,:] = self.getEulerAngles(H[4,0:3,0:3])
-        #         cuboid[6,2,:] = self.dimension[6,:]
+                # Cuboid information for the second finger
+                cuboid[i+2,0,:] = np.matmul(H[i+1,:,:],self.arm_cuboid_origin[i+2,:].T)[0:3]
+                cuboid[i+2,1,:] = self.getEulerAngles(H[i+1,0:3,0:3])
+                cuboid[i+2,2,:] = self.dimension[i+2,:]
 
-        #         return(cuboid)
+                return(cuboid)
 
         # Checks if a matrix is a valid rotation matrix.
         @staticmethod
@@ -143,8 +144,10 @@ if __name__ == "__main__":
 	# joint_angles = calibration_info[calibration_info.files[3]][0].reshape((1,5))
 	# fk = forwardKinematics()
         # M = fk.getJointForwardKinematics(joint_angles)
-        X = np.array([[0., 90., 0., -90., 90., 0., 0.]])
-        fk = forwardKinematics()
+        X = np.array([[0., 0., 60., 0., 0., 0.]])
+        fk = forwardKinematics(base_link='bottom_plate', end_link='gripper_link')
         M = fk.getJointForwardKinematics(X*np.pi/180)
-        for i in range(M.shape[0]):
-                print(np.matmul(np.linalg.inv(M[0,:,:]),M[i,:,:]))
+        print(M)
+        # for i in range(M.shape[0]):
+        #         print(np.matmul(np.linalg.inv(M[0,:,:]),M[i,:,:]))
+        print(fk.getRotatedCuboid(X))

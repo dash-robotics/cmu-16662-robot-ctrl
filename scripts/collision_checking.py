@@ -1,6 +1,6 @@
 import numpy as np 
 from sklearn.preprocessing import normalize
-import forward_kinematics as fk
+import forward_kinematics_extrinsics as fk
 
 # Cuboid Class for creating cuboids from Origin, Orientation and Dimension
 class Cuboid:

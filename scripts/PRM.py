@@ -1,5 +1,5 @@
 import numpy as np 
-import forward_kinematics as fk
+import forward_kinematics_extrinsics as fk
 import collision_checking as cc
 from collections import defaultdict
 import time
@@ -60,12 +60,12 @@ class ProbabilisticRoadMap:
         self.constraint = np.tile(np.array([-179,180])[:,np.newaxis],(1,DOF))
 
         self.obstacles_cuboids = obstacles_cuboids
-        ground_plane = np.array([[[-0.0896, 0.0004, 0.114],[0, 0, 0],[2.0, 2.0, 0.01]]])
+        ground_plane = np.array([[[0.0, 0.000, -0.10],[0, 0, 0],[2.0, 2.0, 0.01]]])
         self.obstacles_cuboids = np.append(self.obstacles_cuboids, ground_plane, axis=0)
 
         self.map = Graph()
-        self.forward_kinematics = fk.forwardKinematics()
-        self.anim = plotter.Plot()
+        self.forward_kinematics = fk.forwardKinematics( base_link='bottom_plate', end_link='gripper_link')
+        # self.anim = plotter.Plot()
 
     # Set constraint on the joint angles 
     def setConstraint(self,constraint_low, constraint_high):
@@ -91,7 +91,7 @@ class ProbabilisticRoadMap:
 
     # sample a node and add in the graph if its in Cfree
     def sampleNode(self):
-        #self.anim.clearPlot()
+        # self.anim.clearPlot()
         samples = np.zeros((1,DOF))
 
         # Generate Sample within Constraints
@@ -127,16 +127,17 @@ class ProbabilisticRoadMap:
     # Check if the sample is in collision with obstacles
     def checkPointCollision(self, sample):
         deg_to_rad = np.pi/180.
-
+        
+        np.insert(sample, 0, 0, axis=1)
         # Find arm cuboids properties in the current state
         arm_cuboids = self.forward_kinematics.getRotatedCuboid(deg_to_rad*sample)
-        #self.Animation(arm_cuboids)
+        # self.Animation(arm_cuboids)
         
 
         for i in range(arm_cuboids.shape[0]):
             for j in range(self.obstacles_cuboids.shape[0]):
                 collision = cc.collisionChecking(arm_cuboids[i,:,:], self.obstacles_cuboids[j,:,:]) 
-                #print('arm', i, 'obstacle', j, collision)
+                # print('arm', i, 'obstacle', j, collision)
 
                 # If even one of the cuboids is in collsion, return true
                 if collision is True:
@@ -157,7 +158,7 @@ class ProbabilisticRoadMap:
             box = cc.Cuboid(self.obstacles_cuboids[i])
             self.anim.plotCuboid(box.getCorners(), i)
 
-        self.anim.showPlot(0.1)
+        self.anim.showPlot(10)
 
     # Check if there are obstacles between new_node and its nearest neighbour
     def checkLineCollision(self, new_node, nearest_node):
@@ -173,6 +174,8 @@ class ProbabilisticRoadMap:
             diff = self.map.nodes[nearest_node[i,0]] - new_node.state
             # Find out the max angle difference and calculate the number of steps to move
             steps = math.ceil(abs(diff).max()/discrete_factor)
+            if steps == 0.0:
+                continue
 
             for j in range(int(steps)+1):
                 # Find the angles for the jth step
@@ -197,7 +200,7 @@ class ProbabilisticRoadMap:
         K = 5
 
         constraint = np.ones((2,5))
-        prm.setConstraint(-90*constraint[0,:],90*constraint[1,:])
+        self.setConstraint(-90*constraint[0,:],90*constraint[1,:])
 
         start_time = time.time()
 
@@ -209,7 +212,7 @@ class ProbabilisticRoadMap:
                 self.checkLineCollision(new_node, nearest_node)
         
         print(len(self.map.nodes))
-        print(self.map.adj_list)
+        #print(self.map.adj_list)
         print('Graph Successfully Built')
 
         # Save graph for future use
@@ -328,8 +331,9 @@ if __name__ == "__main__":
     print('Inside PRM Class')
 
     #obstacles_cuboids = np.load('../data/obstacle_cuboid.npy')
-    obstacles_cuboids = np.array([[[0.0604, 0.1854, 0.214], [0, 0, 0], [0.1, 0.125, 0.225]], \
-                                 [[0.0604, 0.1854, 0.349], [0, 0, 0], [0.125, 0.225, 0.1]]])
+    obstacles_cuboids = np.array([[[-0.12, 0, 0.1025], [0, 0, 0], [0.08, 0.19, 0.205]],
+                                  [[-0.11, 0, 0.305], [0, 0, 0], [0.07, 0.19, 0.20]],
+                                  [[-0.06, 0.0, 0.455], [0, 0, 0], [0.1, 0.15, 0.1]]])
     prm = ProbabilisticRoadMap(obstacles_cuboids)
     # prm.makeGraph(120.0)
 

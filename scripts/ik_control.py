@@ -12,8 +12,9 @@ from sensor_msgs.msg import JointState
 from std_msgs.msg import Float64
 from std_msgs.msg import Empty
 from trac_ik_python.trac_ik import IK
-import camera_forward_kinematics 
+# import camera_forward_kinematics 
 import tf
+import PRM
 
 GRIPPER_LINK = "gripper_link"
 ARM_BASE_LINK = "bottom_plate"
@@ -26,7 +27,7 @@ ROSTOPIC_OPEN_GRIPPER = '/gripper/open'
 ROSTOPIC_CLOSE_GRIPPER = '/gripper/close'
 
 IK_POSITION_TOLERANCE = 0.01
-IK_ORIENTATION_TOLERANCE = np.pi/6
+IK_ORIENTATION_TOLERANCE = np.pi/9
 current_joint_state = None
 
 
@@ -35,7 +36,7 @@ def home_arm(pub):
     set_arm_joint(pub, np.zeros(5))
     rospy.sleep(5)
 
-def set_camera_angles(pan_pub, tilt_pub, pan_rad, tilt_rad, ck):
+def set_camera_angles(pan_pub, tilt_pub, pan_rad, tilt_rad): #, ck):
     pan_msg = Float64()
     pan_msg.data = pan_rad
     rospy.loginfo('Going to camera pan: {} rad'.format(pan_rad))
@@ -46,7 +47,7 @@ def set_camera_angles(pan_pub, tilt_pub, pan_rad, tilt_rad, ck):
     rospy.loginfo('Going to camera tilt: {} rad'.format(tilt_rad))
     tilt_pub.publish(tilt_msg)
 
-    print("Camera Extrinsics", ck.cameraForwardKinematics(np.array([[pan_rad, tilt_rad, 0.]])))
+    # print("Camera Extrinsics", ck.cameraForwardKinematics(np.array([[pan_rad, tilt_rad, 0.]])))
 
 def set_arm_joint(pub, joint_target):
     joint_state = JointState()
@@ -107,9 +108,10 @@ def main():
     global current_joint_state
     
     rad_from_deg = np.pi/180.
+    deg_from_rad = 180./np.pi
 
     ik_solver = IK(ARM_BASE_LINK, GRIPPER_LINK)
-    ck = camera_forward_kinematics.camerakinematics()
+    # ck = camera_forward_kinematics.camerakinematics()
 
     # Describing the publisher subscribers    
     rospy.Subscriber('/joint_states', JointState, get_joint_state)
@@ -123,10 +125,84 @@ def main():
     rospy.sleep(2)
 
     # Homing of all servos
+    home_joint = [0.004601942375302315, -0.4218447208404541, 1.6260197162628174, -0.1426602154970169, 0.010737866163253784]
+    #home_joint = [0.0, 0.0, 1.22, -0.142, 0.0]
+    set_arm_joint(arm_pub, home_joint)
     close_gripper(gripper_close_pub)
-    set_camera_angles(pan_pub, tilt_pub, rad_from_deg*0., rad_from_deg*40.0, ck)  
+    set_camera_angles(pan_pub, tilt_pub, rad_from_deg*0., rad_from_deg*40.0) #, ck)  
 
-    rospy.sleep(5)
+    rospy.sleep(10)
+
+
+    while not rospy.is_shutdown():
+        try:
+            tf_listener.waitForTransform("/bottom_plate", "/icp_cuboid_frame", rospy.Time.now(), rospy.Duration(4.0))
+            P, Q = tf_listener.lookupTransform("/bottom_plate", "/icp_cuboid_frame", rospy.Time(0))
+            print("Box in bottom plate frame")
+            print(P, Q)
+            break
+        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException) as e:
+           print(e)
+    
+    O = tf.transformations.euler_from_quaternion(Q)
+    Q = tf.transformations.quaternion_from_euler(0, np.pi/2, O[2])
+    Q1 = tf.transformations.quaternion_from_euler(0, np.pi/2, O[2]+np.pi/2)
+    
+    poses = [Pose(Point(P[0], P[1], P[2]+0.20), Quaternion(Q[0], Q[1], Q[2], Q[3])),
+             Pose(Point(P[0], P[1], P[2]+0.15), Quaternion(Q[0], Q[1], Q[2], Q[3])),
+             Pose(Point(P[0], P[1], P[2]+0.25), Quaternion(Q[0], Q[1], Q[2], Q[3])),
+             Pose(Point(P[0]-0.1, P[1]-0.2, P[2]+0.15), Quaternion(Q1[0], Q1[1], Q1[2], Q1[3]))]
+
+    # Position, Orientation and Dimension
+    obstacles_cuboids = np.array([[[-0.12, 0, 0.1025], [0, 0, 0], [0.08, 0.19, 0.205]],
+                                  [[-0.11, 0, 0.305], [0, 0, 0], [0.07, 0.19, 0.20]],
+                                  [[-0.06, 0.0, 0.455], [0, 0, 0], [0.1, 0.15, 0.1]],
+                                  [[P[0], P[1], P[2]], [O[0], O[1], O[2]], [0.2, 0.03, 0.1]]])
+
+    prm = PRM.ProbabilisticRoadMap(obstacles_cuboids)
+    # prm.makeGraph(120.0)
+
+    target_joint = None
+    itr = 0
+    home_arm(arm_pub)
+    for pose in poses:
+        print(current_joint_state)
+        print("Reaching a joint state")
+        if current_joint_state:
+            target_joint = compute_ik(
+            ik_solver, pose, current_joint_state)
+
+        if target_joint:
+            # print(np.array([current_joint_state]))
+            # print(target_joint)
+
+            path = prm.makePlan(np.array([current_joint_state])*deg_from_rad, np.array([target_joint])*deg_from_rad)
+            # print(len(path))
+            # for joint_angles in path:
+            #     joint_angles = (joint_angles*rad_from_deg).tolist()
+            #     set_arm_joint(arm_pub, np.array(joint_angles))
+            #     rospy.sleep(5)
+            set_arm_joint(arm_pub, target_joint)
+            rospy.sleep(8)
+            if itr == 0 or itr == 3:
+                open_gripper(gripper_open_pub)
+                rospy.sleep(4)
+            if itr == 1:                
+                close_gripper(gripper_close_pub)
+                rospy.sleep(4)
+        rospy.sleep(4)
+        itr += 1
+
+    # raw_input("Robot ready to close gripper. Press Enter to continue."
+
+    home_arm(arm_pub)
+    open_gripper(gripper_open_pub)
+    set_arm_joint(arm_pub, home_joint)
+
+
+if __name__ == "__main__":
+    main()
+
     # while not rospy.is_shutdown():
     #     try:
     #         tf_listener.waitForTransform("/camera_depth_frame", "/icp_cuboid_frame", rospy.Time.now(), rospy.Duration(4.0))
@@ -150,51 +226,3 @@ def main():
     # q = tf.transformations.quaternion_from_euler(0, 90, 0)
     # poses = [Pose(Point(0.3, 0.000, 0.25), Quaternion(q[0], q[1], q[2], q[3])),
     #         Pose(Point(0.3, 0.000, 0.10), Quaternion(q[0], q[1], q[2], q[3]))]
-
-    while not rospy.is_shutdown():
-        try:
-            tf_listener.waitForTransform("/bottom_plate", "/icp_cuboid_frame", rospy.Time.now(), rospy.Duration(4.0))
-            P, Q = tf_listener.lookupTransform("/bottom_plate", "/icp_cuboid_frame", rospy.Time(0))
-            print("Box in bottom plate frame")
-            print(P, Q)
-            break
-        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException) as e:
-           print(e)
-    
-    poses = [Pose(Point(P[0], P[1], P[2]+0.1), Quaternion(Q[0], Q[1], Q[2], Q[3])),
-             Pose(Point(P[0], P[1], P[2]), Quaternion(Q[0], Q[1], Q[2], Q[3]))]
-
-    target_joint = None
-
-    home_arm(arm_pub)
-    for pose in poses:
-        print(current_joint_state)
-        print("Reaching a joint state")
-        if current_joint_state:
-            target_joint = compute_ik(
-            ik_solver, pose, current_joint_state)
-
-        if target_joint:
-            set_arm_joint(arm_pub, target_joint)
-            rospy.sleep(5)
-
-        open_gripper(gripper_open_pub)
-        rospy.sleep(4)
-
-    raw_input("Robot ready to close gripper. Press Enter to continue.")
-    print("Robot moving. Please wait.")
-    close_gripper(gripper_close_pub)
-    rospy.sleep(4)
-
-    home_arm(arm_pub)
-
-
-if __name__ == "__main__":
-    main()
-
-
-# Some values 
-    # target_poses = [Pose(Point(0.279, 0.176, 0.217),
-    #                      Quaternion(0, 0, 0, 1)),
-    #                 Pose(Point(0.239, 0.0116, 0.05),
-    #                      Quaternion(0, 0.8509035, 0, 0.525322))]
