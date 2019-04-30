@@ -12,7 +12,7 @@ from sensor_msgs.msg import JointState
 from std_msgs.msg import Float64
 from std_msgs.msg import Empty
 from trac_ik_python.trac_ik import IK
-# import camera_forward_kinematics 
+# import camera_forward_kinematics
 import tf
 import PRM
 
@@ -29,6 +29,7 @@ ROSTOPIC_CLOSE_GRIPPER = '/gripper/close'
 IK_POSITION_TOLERANCE = 0.01
 IK_ORIENTATION_TOLERANCE = np.pi/9
 current_joint_state = None
+MIN_CLOSING_GAP = 0.002
 
 
 def home_arm(pub):
@@ -56,8 +57,10 @@ def set_arm_joint(pub, joint_target):
 
 def get_joint_state(data):
     global current_joint_state
+    global current_gripper_state
     # if len(data.position) == 9:
-    current_joint_state = data.position[0:5]
+    current_gripper_state = data.positions[7:9]
+    current_joint_state = data.positions[0:5]
 
 def open_gripper(pub):
     empty_msg = Empty()
@@ -106,14 +109,14 @@ def compute_ik(ik_solver, target_pose, current_joint):
 def main():
     rospy.init_node('IK_Control', anonymous=True)
     global current_joint_state
-    
+
     rad_from_deg = np.pi/180.
     deg_from_rad = 180./np.pi
 
     ik_solver = IK(ARM_BASE_LINK, GRIPPER_LINK)
     # ck = camera_forward_kinematics.camerakinematics()
 
-    # Describing the publisher subscribers    
+    # Describing the publisher subscribers
     rospy.Subscriber('/joint_states', JointState, get_joint_state)
 
     arm_pub = rospy.Publisher(ROSTOPIC_SET_ARM_JOINT, JointState, queue_size=1)
@@ -129,7 +132,7 @@ def main():
     #home_joint = [0.0, 0.0, 1.22, -0.142, 0.0]
     set_arm_joint(arm_pub, home_joint)
     close_gripper(gripper_close_pub)
-    set_camera_angles(pan_pub, tilt_pub, rad_from_deg*0., rad_from_deg*40.0) #, ck)  
+    set_camera_angles(pan_pub, tilt_pub, rad_from_deg*0., rad_from_deg*40.0) #, ck)
 
     rospy.sleep(10)
 
@@ -143,11 +146,11 @@ def main():
             break
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException) as e:
            print(e)
-    
+
     O = tf.transformations.euler_from_quaternion(Q)
     Q = tf.transformations.quaternion_from_euler(0, np.pi/2, O[2])
     Q1 = tf.transformations.quaternion_from_euler(0, np.pi/2, O[2]+np.pi/2)
-    
+
     poses = [Pose(Point(P[0], P[1], P[2]+0.20), Quaternion(Q[0], Q[1], Q[2], Q[3])),
              Pose(Point(P[0], P[1], P[2]+0.15), Quaternion(Q[0], Q[1], Q[2], Q[3])),
              Pose(Point(P[0], P[1], P[2]+0.25), Quaternion(Q[0], Q[1], Q[2], Q[3])),
@@ -187,9 +190,12 @@ def main():
             if itr == 0 or itr == 3:
                 open_gripper(gripper_open_pub)
                 rospy.sleep(4)
-            if itr == 1:                
+            if itr == 1:
                 close_gripper(gripper_close_pub)
                 rospy.sleep(4)
+                # Use the following condition to detect if the object is grasped or not
+                if(np.abs(current_gripper_state[0]) < MIN_CLOSING_GAP and np.abs(current_gripper_state[1] < MIN_CLOSING_GAP)):
+                    state = "Not grabbed"
         rospy.sleep(4)
         itr += 1
 
