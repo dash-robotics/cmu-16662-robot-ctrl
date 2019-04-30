@@ -31,6 +31,7 @@
 #include <dynamixel_workbench_toolbox/dynamixel_workbench.h>
 #include <dynamixel_workbench_msgs/DynamixelStateList.h>
 #include <dynamixel_workbench_msgs/JointCommand.h>
+#include <dynamixel_workbench_msgs/SetPID.h>
 
 // Probably should make these constexpr
 #define GRIPPER_OPEN_MOTOR_POS -1.147412
@@ -66,6 +67,7 @@ class PositionControl
 
   // ROS Service Server
   ros::ServiceServer joint_command_server_;
+  ros::ServiceServer set_pid_server_;
 
   // ROS Service Client
 
@@ -128,6 +130,7 @@ class PositionControl
   void initServer();
   // bool jointCommandMsgCallback(dynamixel_workbench_msgs::JointCommand::Request &req,
                                // dynamixel_workbench_msgs::JointCommand::Response &res);
+  bool setPIDMsgCallback(dynamixel_workbench_msgs::SetPID::Request &req,dynamixel_workbench_msgs::SetPID::Response &res);
   void goalJointPositionCallback(const sensor_msgs::JointState::ConstPtr &msg);
   void gripperCloseCallback(const std_msgs::Empty::ConstPtr &msg);
   void gripperOpenCallback(const std_msgs::Empty::ConstPtr &msg);

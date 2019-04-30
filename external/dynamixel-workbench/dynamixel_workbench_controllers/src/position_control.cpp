@@ -280,6 +280,7 @@ void PositionControl::initSubscriber()
 void PositionControl::initServer()
 {
     // joint_command_server_ = node_handle_.advertiseService("joint_command", &PositionControl::jointCommandMsgCallback, this);
+    set_pid_server_ = node_handle_.advertiseService("SetPID", &PositionControl::setPIDMsgCallback, this);
 }
 
 void PositionControl::dynamixelStatePublish()
@@ -512,29 +513,15 @@ void PositionControl::controlLoop()
     cameraStatePublish();
 }
 
-// bool PositionControl::jointCommandMsgCallback(dynamixel_workbench_msgs::JointCommand::Request &req,
-//                                               dynamixel_workbench_msgs::JointCommand::Response &res)
-// {
-//   int32_t goal_position = 0;
-//   int32_t present_position = 0;
+bool PositionControl::setPIDMsgCallback(dynamixel_workbench_msgs::SetPID::Request &req,dynamixel_workbench_msgs::SetPID::Response &res)
+{
+    int joint_num = req.joint_num;
+    dxl_wb_arm_->itemWrite(dxl_id_arm_[joint_num], "Position_P_Gain", req.P);
+    dxl_wb_arm_->itemWrite(dxl_id_arm_[joint_num], "Position_I_Gain", req.I);
+    dxl_wb_arm_->itemWrite(dxl_id_arm_[joint_num], "Position_D_Gain", req.D);
 
-//   if (req.unit == "rad")
-//   {
-//     goal_position = dxl_wb_->convertRadian2Value(req.id, req.goal_position);
-//   }
-//   else if (req.unit == "raw")
-//   {
-//     goal_position = req.goal_position;
-//   }
-//   else
-//   {
-//     goal_position = req.goal_position;
-//   }
-
-//   bool ret = dxl_wb_->goalPosition(req.id, goal_position);
-
-//   res.result = ret;
-// }
+    res.result = true;
+}
 
 void PositionControl::goalJointPositionCallback(const sensor_msgs::JointState::ConstPtr& msg)
 {

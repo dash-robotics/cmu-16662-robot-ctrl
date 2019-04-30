@@ -47,6 +47,7 @@ add_service_files(
   WheelCommand.srv
   GetDynamixelInfo.srv
   DynamixelCommand.srv
+  SetPID.srv
 )
 
 generate_messages(

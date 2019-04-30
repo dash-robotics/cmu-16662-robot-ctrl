@@ -1,0 +1,8 @@
+# This message is used to set PID for different joints
+
+uint8 joint_num #Possible values: joint_1_id : 1, joint_2_1_id: 2, joint_2_2_id: 3, joint_3_id: 4 joint_4_id: 5, joint_5_id: 6 , gripper: 7, pan: 8, tilt: 9
+uint8 P
+uint8 I
+uint8 D
+---
+bool result
