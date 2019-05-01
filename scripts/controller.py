@@ -38,14 +38,14 @@ class Controller:
         self.IK_ORIENTATION_TOLERANCE = np.pi/9
         self.MIN_CLOSING_GAP = 0.002
 
-    def set_camera_angles(self, pan_rad, tilt_rad):
+    def set_camera_angles(self, angles):
         pan_msg = Float64()
-        pan_msg.data = pan_rad
+        pan_msg.data = angles[0]
         rospy.loginfo('Going to camera pan: {} rad'.format(pan_rad))
         self.pan_pub.publish(pan_msg)
 
         tilt_msg = Float64()
-        tilt_msg.data = tilt_rad
+        tilt_msg.data = angles[1]
         rospy.loginfo('Going to camera tilt: {} rad'.format(tilt_rad))
         self.tilt_pub.publish(tilt_msg)
         rospy.sleep(4)
@@ -107,17 +107,16 @@ class Controller:
 
     # Goes to the position given by FRAME and grabs the object from the top
     def go_to_pose(self, FRAME):
-        while not rospy.is_shutdown():
-            try:
-                self.tf_listener.waitForTransform(self.BOTTOM_PLATE_LINK, FRAME, rospy.Time.now(), rospy.Duration(5.0))
-                P, Q = self.tf_listener.lookupTransform(self.BOTTOM_PLATE_LINK, FRAME, rospy.Time(0))
-                break
-            except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException) as e:
-                print(e)
-    
+        try:
+            self.tf_listener.waitForTransform(self.BOTTOM_PLATE_LINK, FRAME, rospy.Time.now(), rospy.Duration(5.0))
+            P, Q = self.tf_listener.lookupTransform(self.BOTTOM_PLATE_LINK, FRAME, rospy.Time(0))
+        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException) as e:
+            rospy.logwarn(e)
+            return False
+
         O = tf.transformations.euler_from_quaternion(Q)
         Q = tf.transformations.quaternion_from_euler(0, np.pi/2, O[2])
-        
+
         poses = [Pose(Point(P[0], P[1], P[2]+0.20), Quaternion(Q[0], Q[1], Q[2], Q[3])),
                  Pose(Point(P[0], P[1], P[2]+0.15), Quaternion(Q[0], Q[1], Q[2], Q[3]))]
 
@@ -135,7 +134,7 @@ class Controller:
                 rospy.sleep(8)
             else:
                 return False
-        self.close_gripper()
+        return True
 
     # checks if the object was grasped or not
     def check_grasp(self):
