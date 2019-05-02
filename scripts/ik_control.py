@@ -132,7 +132,7 @@ def main():
     # home_joint = [0.0, 0.0, 1.22, -0.142, 0.0]
     set_arm_joint(arm_pub, home_joint)
     close_gripper(gripper_close_pub)
-    set_camera_angles(pan_pub, tilt_pub, rad_from_deg*0., rad_from_deg*40.0) #, ck)
+    set_camera_angles(pan_pub, tilt_pub, rad_from_deg*0., rad_from_deg*20.0) #, ck)
 
     rospy.sleep(10)
 

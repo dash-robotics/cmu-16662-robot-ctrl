@@ -8,6 +8,7 @@ import smach_ros
 from controller import Controller
 from geometry_msgs.msg import PoseStamped
 from dynamixel_workbench_msgs.srv import SetPID
+from object_detection.srv import ObjectDetection
 
 # Initialize controller
 ctrl = Controller()
@@ -18,13 +19,14 @@ class Idle(smach.State):
 
     def execute(self, userdata):
         userdata.tool_id = -1
+        ctrl.open_gripper()
         ctrl.set_camera_angles(ctrl.HOME_POS_CAMERA_01)
         ctrl.set_arm_joint_angles(ctrl.HOME_POS_MANIPULATOR_01)
         rospy.loginfo('Executing state IDLE')
         while(True):
             # TODO: Ask for Input
             userdata.tool_id = input("Enter Tool ID you want:")
-            if(isinstance(userdata.tool_id, int) and userdata.tool_id>0 and userdata.tool_id<4):
+            if(isinstance(userdata.tool_id, int) and userdata.tool_id>0 and userdata.tool_id<5):
                 break
 
         # Return success
@@ -35,14 +37,23 @@ class Idle(smach.State):
 # define state FindTool
 class FindTool(smach.State):
     def __init__(self):
-        smach.State.__init__(self, outcomes=['foundTool'], input_keys=['tool_id'], output_keys=['frame_name'])
+        smach.State.__init__(self, outcomes=['foundTool', 'notfoundTool'], input_keys=['tool_id'], output_keys=['frame_name'])
 
     def execute(self, userdata):
         rospy.loginfo('Executing state FINDTOOL')
-        print(userdata.tool_id)
-        ## TODO: change the name of the variable frame_name
-        userdata.frame_name = "random"
-        return 'foundTool'
+        rospy.wait_for_service('detect_object')
+        try:
+            get_success = rospy.ServiceProxy('detect_object', ObjectDetection)
+            success = get_success(tool_id)
+            if success:
+                userdata.frame_name = "/icp_cuboid_frame"
+                return 'foundTool'
+            else:
+                rospy.logwarn("Service returned false")
+                return 'notfoundTool'
+        except: rospy.ServiceException as e:
+            rospy.logwarn("Service called failed:{0}".format(e))
+            return 'notfoundTool'
 
 # define state IK1
 class IK1(smach.State):
@@ -50,9 +61,11 @@ class IK1(smach.State):
         smach.State.__init__(self, outcomes=['noIK','foundIK'], input_keys=['frame_name'])
 
     def execute(self, userdata):
-        success = ctrl.go_to_pose(userdata.frame_name)
+        ctrl.set_arm_joint_angles(ctrl.HOME_POS_MANIPULATOR_00)
         rospy.loginfo('Executing state IK1')
+        success = ctrl.go_to_grasp_pose(userdata.frame_name)
         return 'foundIK' if success else 'noIK'
+        # return 'foundIK'
 
 # define state Move
 # class Move(smach.State):
@@ -66,7 +79,7 @@ class IK1(smach.State):
 # define state Grab
 class Grab(smach.State):
     def __init__(self):
-        smach.State.__init__(self, outcomes=['grabSuccess','grabFailure'])
+        smach.State.__init__(self, outcomes=['grabSuccess', 'grabFailure'])
 
     def execute(self, userdata):
         ctrl.close_gripper()
@@ -104,7 +117,7 @@ class FindAttention(smach.State):
 
     def execute(self, userdata):
         ## Call service to get the frame id of the hand centroid
-        posestamped = rospy.wait_for_message("/openface2/head_pose", PoseStamped)
+        userdata.head_pose = rospy.wait_for_message("/openface2/head_pose", PoseStamped)
         rospy.loginfo('Executing state FindAttention')
         return 'giveTool'
 
@@ -117,7 +130,7 @@ class IK2(smach.State):
         ## Wait till IK not found. Change tolerance and call compute IK again
         ## Break go to pose into find pose and compute IK functions
         ## Make a different function with gripper pointing upwards and call it from here
-        success = ctrl.go_to_pose(userdata.head_pose)
+        success = ctrl.go_to_handover_pose(userdata.head_pose)
         # if not success
         rospy.loginfo('Executing state IK2')
         return 'foundIK'
@@ -134,7 +147,7 @@ class IK2(smach.State):
 # define state ChangePID
 class ChangePID(smach.State):
     def __init__(self):
-        smach.State.__init__(self, outcomes=['changed', 'not_changed'], input_keys=['joint_nums','PID'])
+        smach.State.__init__(self, outcomes=['changed', 'notchanged'], input_keys=['joint_nums','PID'])
 
     def execute(self, userdata):
         rospy.wait_for_service('SetPID')
@@ -146,7 +159,7 @@ class ChangePID(smach.State):
             return 'changed'
         except rospy.ServiceException as e:
             rospy.logwarn("Service call failed:{0}".format(e))
-            return 'not_changed'
+            return 'notchanged'
 
 # define state OpenGripper
 class OpenGripper(smach.State):
@@ -155,7 +168,7 @@ class OpenGripper(smach.State):
 
     def execute(self, userdata):
         ## Detect when to Open gripper
-        self.open_gripper()
+        ctrl.open_gripper()
         rospy.loginfo('Executing state OpenGripper')
         return 'opened'
 
@@ -166,17 +179,18 @@ def main():
     # Create a SMACH state machine
     sm = smach.StateMachine(outcomes=['stop'])
     sm.userdata.tool_id = -1
-    sm.userdata.joint_nums = [1,2,3]
+    sm.userdata.joint_nums = [1,6]
     sm.userdata.PID = [0,0,0]
     sis = smach_ros.IntrospectionServer('server_name', sm, '/SM_ROOT')
     sis.start()
+    rospy.sleep(5)
     # Open the container
     with sm:
         # Add states to the container
         smach.StateMachine.add('IDLE', Idle(),
                                transitions={'gotToolInput':'FINDTOOL'})
         smach.StateMachine.add('FINDTOOL', FindTool(),
-                               transitions={'foundTool':'IK1'})
+                               transitions={'foundTool':'IK1', 'notfoundTool':'IDLE'})
         smach.StateMachine.add('IK1', IK1(),
                                transitions={'noIK':'stop','foundIK':'GRAB'})
         # smach.StateMachine.add('MOVE', Move(),
