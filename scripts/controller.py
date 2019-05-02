@@ -1,5 +1,7 @@
 import numpy as np
 import rospy
+import time
+from collections import deque
 
 from std_msgs.msg import Float64, Empty
 from trac_ik_python.trac_ik import IK
@@ -18,6 +20,8 @@ class Controller:
         rospy.Subscriber('/joint_states', JointState, self.get_joint_state)
         self.tf_listener = tf.TransformListener()
 
+        self.history = {'timestamp': deque(),
+                        'joint_feedback': deque()}
         # global variables
         self.current_joint_state = None
         self.current_gripper_state = None
@@ -56,6 +60,19 @@ class Controller:
         self.arm_pub.publish(joint_state)
 
     def get_joint_state(self, data):
+        # TODO: Change this when required
+        moveable_joints = [1,2,3]
+        # Add timestamp
+        self.history['timestamp'].append(time.time())
+        if(len(self.history['timestamp']) > 20):
+            self.history['timestamp'].popleft()
+
+        # Add Joint Feedback
+        joint_angles = np.array(data.position)[moveable_joints]
+        self.history['joint_feedback'].append(joint_angles)
+        if(len(self.history['joint_feedback']) > 20):
+            self.history['joint_feedback'].popleft()
+
         self.current_joint_state = data.position[0:5]
         self.current_gripper_state = data.position[7:9]
 
