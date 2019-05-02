@@ -134,13 +134,13 @@ class IK2(smach.State):
 # define state ChangePID
 class ChangePID(smach.State):
     def __init__(self):
-        smach.State.__init__(self, outcomes=['changed', 'not_changed'], input_keys=['P', 'I', 'D'])
+        smach.State.__init__(self, outcomes=['changed', 'not_changed'], input_keys=['joint_num','P', 'I', 'D'])
 
     def execute(self, userdata):
         rospy.wait_for_service('SetPID')
         try:
             set_PID = rospy.ServiceProxy('SetPID', SetPID)
-            response = set_PID(userdata.P, userdata.I, userdata.D)
+            response = set_PID(userdata.joint_num, userdata.P, userdata.I, userdata.D)
             return 'changed'
         except rospy.ServiceException as e:
             rospy.logwarn("Service call failed:{0}".format(e))
