@@ -59,8 +59,8 @@ def get_joint_state(data):
     global current_joint_state
     global current_gripper_state
     # if len(data.position) == 9:
-    current_gripper_state = data.positions[7:9]
-    current_joint_state = data.positions[0:5]
+    current_gripper_state = data.position[7:9]
+    current_joint_state = data.position[0:5]
 
 def open_gripper(pub):
     empty_msg = Empty()
@@ -129,7 +129,7 @@ def main():
 
     # Homing of all servos
     home_joint = [0.004601942375302315, -0.4218447208404541, 1.6260197162628174, -0.1426602154970169, 0.010737866163253784]
-    #home_joint = [0.0, 0.0, 1.22, -0.142, 0.0]
+    # home_joint = [0.0, 0.0, 1.22, -0.142, 0.0]
     set_arm_joint(arm_pub, home_joint)
     close_gripper(gripper_close_pub)
     set_camera_angles(pan_pub, tilt_pub, rad_from_deg*0., rad_from_deg*40.0) #, ck)

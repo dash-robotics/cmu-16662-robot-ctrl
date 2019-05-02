@@ -6,6 +6,7 @@ import smach
 import smach_ros
 
 from controller import Controller
+from geometry_msgs.msg import PoseStamped
 
 # Initialize controller
 ctrl = Controller()
@@ -98,25 +99,24 @@ class MoveHome2(smach.State):
 class FindAttention(smach.State):
 
     def __init__(self):
-        smach.State.__init__(self, outcomes=['giveTool'], output_keys=['frame_name'])
+        smach.State.__init__(self, outcomes=['giveTool'], output_keys=['head_pose'])
 
     def execute(self, userdata):
         ## Call service to get the frame id of the hand centroid
-        ## TODO: change the name of the variable frame_name
-        userdata.frame_name = "random"
+        posestamped = rospy.wait_for_message("/openface2/head_pose", PoseStamped)
         rospy.loginfo('Executing state FindAttention')
         return 'giveTool'
 
 # define state IK2
 class IK2(smach.State):
     def __init__(self):
-        smach.State.__init__(self, outcomes=['foundIK'], input_keys=['frame_name'])
+        smach.State.__init__(self, outcomes=['foundIK'], input_keys=['head_pose'])
 
     def execute(self, userdata):
         ## Wait till IK not found. Change tolerance and call compute IK again
         ## Break go to pose into find pose and compute IK functions
         ## Make a different function with gripper pointing upwards and call it from here
-        success = ctrl.go_to_pose(userdata.frame_name)
+        success = ctrl.go_to_pose(userdata.head_pose)
         # if not success
         rospy.loginfo('Executing state IK2')
         return 'foundIK'

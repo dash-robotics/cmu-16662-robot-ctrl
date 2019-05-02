@@ -33,7 +33,7 @@ class Controller:
         self.HOME_POS_MANIPULATOR_01 = [0.004601942375302315, -0.4218447208404541, 1.6260197162628174, -0.1426602154970169, 0.010737866163253784]
         self.HOME_POS_MANIPULATOR_02 = [0.0, 0.0, 1.22, -0.142, 0.0]
         self.HOME_POS_CAMERA_01 = [0.0, 0.698]
-        self.HOME_POS_CAMERA_02 = [0.698, 0.0]
+        self.HOME_POS_CAMERA_02 = [-0.523, -0.523]
         self.IK_POSITION_TOLERANCE = 0.01
         self.IK_ORIENTATION_TOLERANCE = np.pi/9
         self.MIN_CLOSING_GAP = 0.002
@@ -41,12 +41,12 @@ class Controller:
     def set_camera_angles(self, angles):
         pan_msg = Float64()
         pan_msg.data = angles[0]
-        rospy.loginfo('Going to camera pan: {} rad'.format(pan_rad))
+        rospy.loginfo('Going to camera pan: {} rad'.format(angles[0]))
         self.pan_pub.publish(pan_msg)
 
         tilt_msg = Float64()
         tilt_msg.data = angles[1]
-        rospy.loginfo('Going to camera tilt: {} rad'.format(tilt_rad))
+        rospy.loginfo('Going to camera tilt: {} rad'.format(angles[1]))
         self.tilt_pub.publish(tilt_msg)
         rospy.sleep(4)
 
@@ -57,7 +57,7 @@ class Controller:
 
     def get_joint_state(self, data):
         self.current_joint_state = data.position[0:5]
-        self.current_gripper_state = data.positions[7:9]
+        self.current_gripper_state = data.position[7:9]
 
     def open_gripper(self):
         empty_msg = Empty()
