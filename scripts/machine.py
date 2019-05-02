@@ -189,9 +189,11 @@ def main():
                                transitions={'foundIK':'CHANGEPID'})
         # smach.StateMachine.add('MOVEGIVE', MoveGive(),
         #                        transitions={'reached':'CHANGEPID'})
-        userdata.P = 0
-        userdata.I = 0
-        userdata.D = 0
+
+        sm.userdata.P = 0
+        sm.userdata.I = 0
+        sm.userdata.D = 0
+
         smach.StateMachine.add('CHANGEPID', ChangePID(),
                                transitions={'changed':'OPENGRIPPER', 'notchanged': 'CHANGEPID'})
         smach.StateMachine.add('OPENGRIPPER', OpenGripper(),
