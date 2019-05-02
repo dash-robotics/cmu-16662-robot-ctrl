@@ -25,6 +25,7 @@ class Controller:
         # global variables
         self.current_joint_state = None
         self.current_gripper_state = None
+        self.current_target_state = None
 
         # global frames
         self.GRIPPER_LINK = "gripper_link"
@@ -38,10 +39,11 @@ class Controller:
         self.HOME_POS_MANIPULATOR_01 = [0.004601942375302315, -0.4218447208404541, 1.6260197162628174, -0.1426602154970169, 0.010737866163253784]
         self.HOME_POS_MANIPULATOR_02 = [0.0, 0.0, 1.22, -1.57, 1.57]
         self.HOME_POS_CAMERA_01 = [0.0, 0.698]
-        self.HOME_POS_CAMERA_02 = [-0.523, -0.523]
+        self.HOME_POS_CAMERA_02 = [-0.452, -0.452]
         self.IK_POSITION_TOLERANCE = 0.01
-        self.IK_ORIENTATION_TOLERANCE = np.pi/9
+        self.IK_ORIENTATION_TOLERANCE = np.pi/7
         self.MIN_CLOSING_GAP = 0.002
+        self.MOVEABLE_JOINTS = [0,4]
 
     def set_camera_angles(self, angles):
         pan_msg = Float64()
@@ -53,25 +55,24 @@ class Controller:
         tilt_msg.data = float(angles[1])
         rospy.loginfo('Going to camera tilt: {} rad'.format(angles[1]))
         self.tilt_pub.publish(tilt_msg)
-        rospy.sleep(4)
 
     def set_arm_joint_angles(self, joint_target):
         joint_state = JointState()
         joint_state.position = tuple(joint_target)
         rospy.loginfo('Going to arm joint 0: {} rad'.format(joint_target[0]))
         self.arm_pub.publish(joint_state)
-        rospy.sleep(4)
+        rospy.sleep(6)
 
     def get_joint_state(self, data):
         # TODO: Change this when required
-        moveable_joints = [1,2,3]
+        
         # Add timestamp
         self.history['timestamp'].append(time.time())
         if(len(self.history['timestamp']) > 20):
             self.history['timestamp'].popleft()
 
         # Add Joint Feedback
-        joint_angles = np.array(data.position)[moveable_joints]
+        joint_angles = np.array(data.position)[self.MOVEABLE_JOINTS]
         self.history['joint_feedback'].append(joint_angles)
         if(len(self.history['joint_feedback']) > 20):
             self.history['joint_feedback'].popleft()
@@ -137,8 +138,8 @@ class Controller:
         O = tf.transformations.euler_from_quaternion(Q)
         Q = tf.transformations.quaternion_from_euler(0, np.pi/2, O[2])
 
-        poses = [Pose(Point(P[0], P[1], P[2]+0.20), Quaternion(Q[0], Q[1], Q[2], Q[3])),
-                 Pose(Point(P[0], P[1], P[2]+0.15), Quaternion(Q[0], Q[1], Q[2], Q[3]))]
+        poses = [Pose(Point(P[0], P[1], P[2]+0.15), Quaternion(Q[0], Q[1], Q[2], Q[3])),
+                 Pose(Point(P[0], P[1], P[2]+0.10), Quaternion(Q[0], Q[1], Q[2], Q[3]))]
 
         target_joint = None
         self.open_gripper()
@@ -151,7 +152,7 @@ class Controller:
 
             if target_joint:
                 self.set_arm_joint_angles(target_joint)
-                rospy.sleep(8)
+                self.current_target_state = np.array(target_joint)[self.MOVEABLE_JOINTS]
             else:
                 return False
         return True
@@ -171,7 +172,7 @@ class Controller:
 
     # Goes to the position given by FRAME and grabs the object from the top
     def go_to_handover_pose(self, pose):
-        # print(pose)
+        print(pose)
         try:
             self.tf_listener.waitForTransform(self.BOTTOM_PLATE_LINK, pose.header.frame_id, rospy.Time.now(), rospy.Duration(5.0))
             P, Q = self.tf_listener.lookupTransform(self.BOTTOM_PLATE_LINK, pose.header.frame_id, rospy.Time(0))
@@ -182,20 +183,23 @@ class Controller:
         O = tf.transformations.euler_from_quaternion(Q)
         Q = tf.transformations.quaternion_from_euler(0, -np.pi/3, O[2])
 
-        poses = [Pose(Point(P[0], P[1], P[2]-0.45), Quaternion(Q[0], Q[1], Q[2], Q[3]))]
+        poses = Pose(Point(P[0], P[1], P[2]-0.45), Quaternion(Q[0], Q[1], Q[2], Q[3]))
 
         target_joint = None
-        while target_joint is not None:
+        while target_joint is None:
             if self.current_joint_state:
-                target_joint = self.compute_ik(pose)
+                target_joint = self.compute_ik(poses)
             else:
                 print("Joint State Subscriber not working")
                 return False
 
             if target_joint:
+                print(target_joint)
                 self.set_arm_joint_angles(target_joint)
-                rospy.sleep(8)
+                self.current_target_state = np.array(target_joint)[self.MOVEABLE_JOINTS]
             else:
-                self.IK_POSITION_TOLERANCE += 0.1 
+                rospy.logwarn("No Solution was found. Current Tolerance "+ str(self.IK_POSITION_TOLERANCE))
+                self.IK_POSITION_TOLERANCE += 0.05 
+        print(target_joint)
         return True
 

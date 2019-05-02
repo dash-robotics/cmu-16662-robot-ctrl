@@ -1,6 +1,7 @@
 <launch>
 	<include file="position_control.launch"/>
 	<include file="$(find openface2_ros)/launch/openface2_ros.launch"/>
+	<include file="$(find object_detection)/launch/object_detection.launch"/>
 	<include file="$(find realsense2_camera)/launch/rs_camera.launch">
         <arg name="enable_pointcloud" value="true"/>
     	</include>

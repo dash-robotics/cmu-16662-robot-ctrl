@@ -10,6 +10,7 @@ from controller import Controller
 from geometry_msgs.msg import PoseStamped
 from dynamixel_workbench_msgs.srv import SetPID
 from object_detection.srv import ObjectDetection
+import pdb
 
 # Initialize controller
 ctrl = Controller()
@@ -43,17 +44,17 @@ class FindTool(smach.State):
 
     def execute(self, userdata):
         rospy.loginfo('Executing state FINDTOOL')
-        rospy.wait_for_service('detect_object')
+        rospy.wait_for_service('object_pose_detection/detect_objects')
         try:
-            get_success = rospy.ServiceProxy('detect_object', ObjectDetection)
-            success = get_success(tool_id)
+            get_success = rospy.ServiceProxy('object_pose_detection/detect_objects', ObjectDetection)
+            success = get_success(userdata.tool_id)
             if success:
-                userdata.frame_name = "/icp_cuboid_frame"
+                userdata.frame_name = "/object_frame"
                 return 'foundTool'
             else:
                 rospy.logwarn("Service returned false")
                 return 'notfoundTool'
-        except: rospy.ServiceException as e:
+        except rospy.ServiceException as e:
             rospy.logwarn("Service called failed:{0}".format(e))
             return 'notfoundTool'
 
@@ -126,15 +127,17 @@ class FindAttention(smach.State):
 # define state IK2
 class IK2(smach.State):
     def __init__(self):
-        smach.State.__init__(self, outcomes=['foundIK'], input_keys=['head_pose'])
+        smach.State.__init__(self, outcomes=['foundIK', 'noIK'], input_keys=['head_pose'])
 
     def execute(self, userdata):
         ## Wait till IK not found. Change tolerance and call compute IK again
         ## Break go to pose into find pose and compute IK functions
         ## Make a different function with gripper pointing upwards and call it from here
-        success = ctrl.go_to_handover_pose(userdata.head_pose)
-        # if not success
         rospy.loginfo('Executing state IK2')
+        success = ctrl.go_to_handover_pose(userdata.head_pose)
+        rospy.sleep(8)
+        if not success:
+            return 'noIK'
         return 'foundIK'
 
 # # define state MoveGive
@@ -158,6 +161,7 @@ class ChangePID(smach.State):
             P,I,D = userdata.PID
             for joint_num in userdata.joint_nums:
                 response = set_PID(joint_num, P, I, D)
+            rospy.sleep(10)
             return 'changed'
         except rospy.ServiceException as e:
             rospy.logwarn("Service call failed:{0}".format(e))
@@ -175,10 +179,12 @@ class OpenGripper(smach.State):
             joint_len = len(ctrl.history['joint_feedback'][0])
             joint_sum = np.zeros(ctrl.history['joint_feedback'][0].shape)
             for joint_feedback in ctrl.history['joint_feedback']:
-                joint_sum += joint_feedback
+                # pdb.set_trace()
+                joint_sum += joint_feedback - ctrl.current_target_state
             avg_joint_sum = joint_sum/joint_len
-            if(np.sum(avg_joint_sum) < MIN_JOINT_MOTION_FOR_HAND_OVER):
+            if(np.sum(avg_joint_sum) > MIN_JOINT_MOTION_FOR_HAND_OVER):
                 ctrl.open_gripper()
+                rospy.sleep(1)
                 return 'opened'
 
 
@@ -190,7 +196,8 @@ def main():
     sm = smach.StateMachine(outcomes=['stop'])
     sm.userdata.tool_id = -1
     sm.userdata.joint_nums = [1,6]
-    sm.userdata.PID = [0,0,0]
+    sm.userdata.PID_Final = [0,0,0]
+    sm.userdata.PID_Initial = [640,5,50]
     sis = smach_ros.IntrospectionServer('server_name', sm, '/SM_ROOT')
     sis.start()
     rospy.sleep(5)
@@ -214,14 +221,18 @@ def main():
         smach.StateMachine.add('ATTENTIONSEEKER', FindAttention(),
                                transitions={'giveTool':'IK2'})
         smach.StateMachine.add('IK2', IK2(),
-                               transitions={'foundIK':'CHANGEPID'})
+                               transitions={'foundIK':'CHANGEPID', 'noIK':'stop'})
         # smach.StateMachine.add('MOVEGIVE', MoveGive(),
         #                        transitions={'reached':'CHANGEPID'})
 
         smach.StateMachine.add('CHANGEPID', ChangePID(),
-                               transitions={'changed':'OPENGRIPPER', 'notchanged': 'CHANGEPID'})
+                               transitions={'changed':'OPENGRIPPER', 'notchanged': 'CHANGEPID'},
+                               remapping={'PID':'PID_Final'})
         smach.StateMachine.add('OPENGRIPPER', OpenGripper(),
-                               transitions={'opened':'IDLE'})
+                               transitions={'opened':'CHANGEBACKPID'})
+        smach.StateMachine.add('CHANGEBACKPID', ChangePID(),
+                               transitions={'changed':'IDLE', 'notchanged': 'CHANGEPID'},
+                               remapping={'PID':'PID_Initial'})
 
 
 
