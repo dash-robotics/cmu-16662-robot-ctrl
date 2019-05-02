@@ -6,6 +6,7 @@ import smach
 import smach_ros
 
 from controller import Controller
+from dynamixel_workbench_msgs.srv import SetPID
 
 # Initialize controller
 ctrl = Controller()
@@ -133,12 +134,17 @@ class IK2(smach.State):
 # define state ChangePID
 class ChangePID(smach.State):
     def __init__(self):
-        smach.State.__init__(self, outcomes=['changed'])
+        smach.State.__init__(self, outcomes=['changed', 'not_changed'], input_keys=['P', 'I', 'D'])
 
     def execute(self, userdata):
-        ## Service call to change the PID values
-        rospy.loginfo('Executing state ChangePID')
-        return 'changed'
+        rospy.wait_for_service('SetPID')
+        try:
+            set_PID = rospy.ServiceProxy('SetPID', SetPID)
+            response = set_PID(userdata.P, userdata.I, userdata.D)
+            return 'changed'
+        except rospy.ServiceException as e:
+            rospy.logwarn("Service call failed:{0}".format(e))
+            return 'not_changed'
 
 # define state OpenGripper
 class OpenGripper(smach.State):
@@ -183,8 +189,11 @@ def main():
                                transitions={'foundIK':'CHANGEPID'})
         # smach.StateMachine.add('MOVEGIVE', MoveGive(),
         #                        transitions={'reached':'CHANGEPID'})
+        userdata.P = 0
+        userdata.I = 0
+        userdata.D = 0
         smach.StateMachine.add('CHANGEPID', ChangePID(),
-                               transitions={'changed':'OPENGRIPPER'})
+                               transitions={'changed':'OPENGRIPPER', 'notchanged': 'CHANGEPID'})
         smach.StateMachine.add('OPENGRIPPER', OpenGripper(),
                                transitions={'opened':'IDLE'})
 
