@@ -134,13 +134,15 @@ class IK2(smach.State):
 # define state ChangePID
 class ChangePID(smach.State):
     def __init__(self):
-        smach.State.__init__(self, outcomes=['changed', 'not_changed'], input_keys=['joint_num','P', 'I', 'D'])
+        smach.State.__init__(self, outcomes=['changed', 'not_changed'], input_keys=['joint_nums','PID'])
 
     def execute(self, userdata):
         rospy.wait_for_service('SetPID')
         try:
             set_PID = rospy.ServiceProxy('SetPID', SetPID)
-            response = set_PID(userdata.joint_num, userdata.P, userdata.I, userdata.D)
+            P,I,D = userdata.PID
+            for joint_num in userdata.joint_nums:
+                response = set_PID(joint_num, P, I, D)
             return 'changed'
         except rospy.ServiceException as e:
             rospy.logwarn("Service call failed:{0}".format(e))
@@ -164,6 +166,8 @@ def main():
     # Create a SMACH state machine
     sm = smach.StateMachine(outcomes=['stop'])
     sm.userdata.tool_id = -1
+    sm.userdata.joint_nums = [1,2,3]
+    sm.userdata.PID = [0,0,0]
     sis = smach_ros.IntrospectionServer('server_name', sm, '/SM_ROOT')
     sis.start()
     # Open the container
@@ -189,10 +193,6 @@ def main():
                                transitions={'foundIK':'CHANGEPID'})
         # smach.StateMachine.add('MOVEGIVE', MoveGive(),
         #                        transitions={'reached':'CHANGEPID'})
-
-        sm.userdata.P = 0
-        sm.userdata.I = 0
-        sm.userdata.D = 0
 
         smach.StateMachine.add('CHANGEPID', ChangePID(),
                                transitions={'changed':'OPENGRIPPER', 'notchanged': 'CHANGEPID'})
