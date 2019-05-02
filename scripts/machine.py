@@ -4,12 +4,14 @@ import roslib
 import rospy
 import smach
 import smach_ros
+import numpy as np
 
 from controller import Controller
 from dynamixel_workbench_msgs.srv import SetPID
 
 # Initialize controller
 ctrl = Controller()
+MIN_JOINT_MOTION_FOR_HAND_OVER = 0.1
 # define state Idle
 class Idle(smach.State):
     def __init__(self):
@@ -155,9 +157,17 @@ class OpenGripper(smach.State):
 
     def execute(self, userdata):
         ## Detect when to Open gripper
-        self.open_gripper()
         rospy.loginfo('Executing state OpenGripper')
-        return 'opened'
+        while(True):
+            joint_len = len(ctrl.history['joint_feedback'][0])
+            joint_sum = np.zeros(ctrl.history['joint_feedback'][0].shape)
+            for joint_feedback in ctrl.history['joint_feedback']:
+                joint_sum += joint_feedback
+            avg_joint_sum = joint_sum/joint_len
+            if(np.sum(avg_joint_sum) < MIN_JOINT_MOTION_FOR_HAND_OVER):
+                ctrl.open_gripper()
+                return 'opened'
+
 
 def main():
     rospy.init_node('attention_bot')
