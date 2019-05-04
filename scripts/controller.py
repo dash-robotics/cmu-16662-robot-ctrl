@@ -61,7 +61,7 @@ class Controller:
         joint_state.position = tuple(joint_target)
         rospy.loginfo('Going to arm joint 0: {} rad'.format(joint_target[0]))
         self.arm_pub.publish(joint_state)
-        rospy.sleep(6)
+        rospy.sleep(8)
 
     def get_joint_state(self, data):
         # TODO: Change this when required
@@ -74,7 +74,7 @@ class Controller:
         # Add Joint Feedback
         joint_angles = np.array(data.position)[self.MOVEABLE_JOINTS]
         self.history['joint_feedback'].append(joint_angles)
-        if(len(self.history['joint_feedback']) > 20):
+        if(len(self.history['joint_feedback']) > 10):
             self.history['joint_feedback'].popleft()
 
         self.current_joint_state = data.position[0:5]
@@ -140,6 +140,7 @@ class Controller:
 
         poses = [Pose(Point(P[0], P[1], P[2]+0.15), Quaternion(Q[0], Q[1], Q[2], Q[3])),
                  Pose(Point(P[0], P[1], P[2]+0.10), Quaternion(Q[0], Q[1], Q[2], Q[3]))]
+        print(poses)
 
         target_joint = None
         self.open_gripper()

@@ -14,7 +14,7 @@ import pdb
 
 # Initialize controller
 ctrl = Controller()
-MIN_JOINT_MOTION_FOR_HAND_OVER = 0.1
+MIN_JOINT_MOTION_FOR_HAND_OVER = 0.05
 # define state Idle
 class Idle(smach.State):
     def __init__(self):
@@ -99,7 +99,7 @@ class MoveHome2(smach.State):
 
     def execute(self, userdata):
         ctrl.set_camera_angles(ctrl.HOME_POS_CAMERA_02)
-        ctrl.set_arm_joint_angles(ctrl.HOME_POS_MANIPULATOR_02)
+        ctrl.set_arm_joint_angles(ctrl.HOME_POS_MANIPULATOR_00)
         rospy.loginfo('Executing state MoveHome2')
         return 'reached'
 
@@ -135,7 +135,7 @@ class IK2(smach.State):
         ## Make a different function with gripper pointing upwards and call it from here
         rospy.loginfo('Executing state IK2')
         success = ctrl.go_to_handover_pose(userdata.head_pose)
-        rospy.sleep(8)
+        rospy.sleep(3)
         if not success:
             return 'noIK'
         return 'foundIK'
@@ -161,7 +161,6 @@ class ChangePID(smach.State):
             P,I,D = userdata.PID
             for joint_num in userdata.joint_nums:
                 response = set_PID(joint_num, P, I, D)
-            rospy.sleep(10)
             return 'changed'
         except rospy.ServiceException as e:
             rospy.logwarn("Service call failed:{0}".format(e))
@@ -178,11 +177,12 @@ class OpenGripper(smach.State):
         while(True):
             joint_len = len(ctrl.history['joint_feedback'][0])
             joint_sum = np.zeros(ctrl.history['joint_feedback'][0].shape)
-            for joint_feedback in ctrl.history['joint_feedback']:
-                # pdb.set_trace()
+            for joint_feedback in list(ctrl.history['joint_feedback']):
+                #pdb.set_trace()
                 joint_sum += joint_feedback - ctrl.current_target_state
             avg_joint_sum = joint_sum/joint_len
-            if(np.sum(avg_joint_sum) > MIN_JOINT_MOTION_FOR_HAND_OVER):
+            # print(joint_sum)
+            if(np.abs(np.sum(avg_joint_sum)) > MIN_JOINT_MOTION_FOR_HAND_OVER):
                 ctrl.open_gripper()
                 rospy.sleep(1)
                 return 'opened'
@@ -195,7 +195,7 @@ def main():
     # Create a SMACH state machine
     sm = smach.StateMachine(outcomes=['stop'])
     sm.userdata.tool_id = -1
-    sm.userdata.joint_nums = [1,6]
+    sm.userdata.joint_nums = [0,5]
     sm.userdata.PID_Final = [0,0,0]
     sm.userdata.PID_Initial = [640,5,50]
     sis = smach_ros.IntrospectionServer('server_name', sm, '/SM_ROOT')
