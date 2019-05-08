@@ -204,3 +204,27 @@ class Controller:
         print(target_joint)
         return True
 
+    # Goes to the position given by FRAME and grabs the object from the top
+    def go_to_data_collection_pose(self, pose):
+        # print(pose)
+
+        # poses = Pose(Point(pose[0], pose[1], pose[2]), Quaternion(pose[3], pose[4], pose[5], pose[6]))
+
+        target_joint = None
+        while target_joint is None:
+            if self.current_joint_state:
+                target_joint = self.compute_ik(pose)
+            else:
+                print("Joint State Subscriber not working")
+                return False
+
+            if target_joint:
+                print(target_joint)
+                self.set_arm_joint_angles(target_joint)
+                self.current_target_state = np.array(target_joint)[self.MOVEABLE_JOINTS]
+            else:
+                rospy.logwarn("No Solution was found. Current Tolerance "+ str(self.IK_POSITION_TOLERANCE))
+                self.IK_POSITION_TOLERANCE += 0.05 
+        print(target_joint)
+        return True
+

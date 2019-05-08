@@ -5,11 +5,14 @@ import rospy
 import smach
 import smach_ros
 import numpy as np
+import tf
 
 from controller import Controller
 from geometry_msgs.msg import PoseStamped
 from dynamixel_workbench_msgs.srv import SetPID
 from object_detection.srv import ObjectDetection
+
+from geometry_msgs.msg import Pose, Point, Quaternion
 
 # Initialize controller
 ctrl = Controller()
@@ -54,13 +57,18 @@ class Sample(smach.State):
 # define state IK1
 class IK1(smach.State):
     def __init__(self):
-        smach.State.__init__(self, outcomes=['foundIK', 'noIK'])
+        smach.State.__init__(self, outcomes=['foundIK', 'noIK'], input_keys=['point','sampled'])
 
     def execute(self, userdata):
         ## Wait till IK not found. Change tolerance and call compute IK again
         ## Break go to pose into find pose and compute IK functions
         ## Make a different function with gripper pointing upwards and call it from here
-        success = ctrl.go_to_handover_pose(userdata.head_pose)
+
+        Q = tf.transformations.quaternion_from_euler(userdata.sampled[0], userdata.sampled[1], userdata.sampled[2])
+        
+        pose_input = Pose(Point(userdata.point[0], userdata.point[1], userdata.point[2]), Quaternion(Q[0], Q[1], Q[2], Q[3]))
+        
+        success = ctrl.go_to_data_collection_pose(pose_input)
         # if not success
         rospy.loginfo('Executing state IK1')
         return 'foundIK'
@@ -129,6 +137,7 @@ def main():
     sm.userdata.sample_constraint_min = [-np.pi/3,-np.pi/3,-np.pi/3, 0.01]
     sm.userdata.sample_constraint_max = [np.pi/3,np.pi/3,np.pi/3, 0.5]
     sm.userdata.sampled = [0,0,0,0]
+    sm.userdata.point = [0.3, 0, 0.2]
     sis = smach_ros.IntrospectionServer('server_name', sm, '/SM_ROOT')
     sis.start()
     rospy.sleep(5)
