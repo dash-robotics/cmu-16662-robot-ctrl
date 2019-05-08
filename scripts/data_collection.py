@@ -35,18 +35,19 @@ class GrabTool(smach.State):
     def execute(self, userdata):
         while(True):
             # TODO: Ask for Input
-            ip = input("Enter a number (1-4) to start:")
-            if(isinstance(ip, int) and ip>0 and ip<5):
+            ip = input("Enter 1 to grab tool:")
+            if(isinstance(ip, int) and ip==1):
+                ctrl.close_gripper()
                 break
-        # Return success
         return 'grabbedTool'
 
 class Sample(smach.State):
     def __init__(self):
-        smach.State.__init__(self, outcomes=['gotSample'])
+        smach.State.__init__(self, outcomes=['gotSample'], input_keys=['sample_constraint_min','sample_constraint_max'], output_keys=['sampled'])
 
     def execute(self, userdata):
-        
+        for idx, (constraint_min, constraint_max) in enumerate(zip(userdata.sample_constraint_min, userdata.sample_constraint_max)):
+            userdata.sampled[idx] = np.random.uniform(constraint_min, constraint_max)
         # Return success
         return 'gotSample'
 
@@ -83,7 +84,7 @@ class ChangePID(smach.State):
 # define state OpenGripper
 class OpenGripper(smach.State):
     def __init__(self):
-        smach.State.__init__(self, outcomes=['opened'])
+        smach.State.__init__(self, outcomes=['opened'], input_keys=['sampled'])
 
     def execute(self, userdata):
         ## Detect when to Open gripper
@@ -94,19 +95,25 @@ class OpenGripper(smach.State):
             for joint_feedback in ctrl.history['joint_feedback']:
                 joint_sum += joint_feedback
             avg_joint_sum = joint_sum/joint_len
-            if(np.sum(avg_joint_sum) < MIN_JOINT_MOTION_FOR_HAND_OVER):
+            if(np.sum(avg_joint_sum) < userdata.sampled[3]):
                 ctrl.open_gripper()
                 return 'opened'
 
 # define state OpenGripper
 class Evaluate(smach.State):
     def __init__(self):
-        smach.State.__init__(self, outcomes=['done', 'exit'])
+        smach.State.__init__(self, outcomes=['done', 'exit'], input_keys=['sampled'])
 
     def execute(self, userdata):
         # TODO: Ask for Input
         userdata.score = input("Enter score for this exchange (1 - 10):")
         if(isinstance(userdata.score, int) and userdata.score>0 and userdata.score<11):
+            y = np.load("save.npy") if os.path.isfile("save.npy") else []
+            x = np.append(userdata.sampled, userdata.score)
+            if y == []:
+                np.save("save.npy",x)
+            else:
+                np.save("save.npy",np.vstack(y,x))
             return 'done'
         else: 
             return 'exit'
@@ -119,7 +126,9 @@ def main():
     sm = smach.StateMachine(outcomes=['stop'])
     sm.userdata.tool_id = -1
     sm.userdata.joint_nums = [1,6]
-    sm.userdata.PID = [0,0,0]
+    sm.userdata.sample_constraint_min = [-np.pi/3,-np.pi/3,-np.pi/3, 0.01]
+    sm.userdata.sample_constraint_max = [np.pi/3,np.pi/3,np.pi/3, 0.5]
+    sm.userdata.sampled = [0,0,0,0]
     sis = smach_ros.IntrospectionServer('server_name', sm, '/SM_ROOT')
     sis.start()
     rospy.sleep(5)
