@@ -41,9 +41,11 @@ class Controller:
         self.HOME_POS_CAMERA_01 = [0.0, 0.698]
         self.HOME_POS_CAMERA_02 = [-0.452, -0.452]
         self.IK_POSITION_TOLERANCE = 0.01
-        self.IK_ORIENTATION_TOLERANCE = np.pi/7
+        self.IK_ORIENTATION_TOLERANCE = np.pi/3
         self.MIN_CLOSING_GAP = 0.002
-        self.MOVEABLE_JOINTS = [0,4]
+        self.MOVEABLE_JOINTS = [0, 1, 4]
+        self.CONVERGENCE_CRITERION = 0.1
+        self.CONVERGENCE_CRITERION_COUNT = 10
 
     def set_camera_angles(self, angles):
         pan_msg = Float64()
@@ -59,22 +61,28 @@ class Controller:
     def set_arm_joint_angles(self, joint_target):
         joint_state = JointState()
         joint_state.position = tuple(joint_target)
-        rospy.loginfo('Going to arm joint 0: {} rad'.format(joint_target[0]))
         self.arm_pub.publish(joint_state)
-        rospy.sleep(8)
+        
+        convergence_count = 0
+        while(convergence_count < self.CONVERGENCE_CRITERION_COUNT):
+            if(np.sum(np.abs(np.asarray(self.current_joint_state)- np.asarray(joint_target)))<self.CONVERGENCE_CRITERION):
+                convergence_count = convergence_count + 1
+            else:
+                convergence_count = 0
+        rospy.loginfo("CONVERGED!")
 
     def get_joint_state(self, data):
         # TODO: Change this when required
         
         # Add timestamp
         self.history['timestamp'].append(time.time())
-        if(len(self.history['timestamp']) > 20):
+        if(len(self.history['timestamp']) > 2):
             self.history['timestamp'].popleft()
 
         # Add Joint Feedback
         joint_angles = np.array(data.position)[self.MOVEABLE_JOINTS]
         self.history['joint_feedback'].append(joint_angles)
-        if(len(self.history['joint_feedback']) > 10):
+        if(len(self.history['joint_feedback']) > 2):
             self.history['joint_feedback'].popleft()
 
         self.current_joint_state = data.position[0:5]
